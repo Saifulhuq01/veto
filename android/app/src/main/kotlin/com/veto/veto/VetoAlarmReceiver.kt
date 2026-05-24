@@ -19,13 +19,28 @@ class VetoAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val blockId = intent.getStringExtra("id") ?: "0"
-        val title = intent.getStringExtra("title") ?: "Focus Block starting!"
+        val title = intent.getStringExtra("title") ?: "Focus Block"
         val desc = intent.getStringExtra("description") ?: "Time to focus."
-        val id = blockId.hashCode()
+        val type = intent.getStringExtra("type") ?: "starting_now"
+        
+        // Unique ID based on ID + type so notifications don't overwrite each other
+        val id = (blockId + "_" + type).hashCode()
 
-        Log.d("VetoAlarmReceiver", "Alarm received: $title ($desc)")
+        val notificationTitle = if (type == "30_min_before") {
+            "Upcoming Focus Block: $title"
+        } else {
+            "Focus Session Starting: $title"
+        }
 
-        showNotification(context, id, title, desc)
+        val notificationDesc = if (type == "30_min_before") {
+            "Starts in 30 minutes. Get ready to lock down!"
+        } else {
+            desc
+        }
+
+        Log.d("VetoAlarmReceiver", "Alarm received type $type: $title")
+
+        showNotification(context, id, notificationTitle, notificationDesc)
     }
 
     private fun showNotification(context: Context, notificationId: Int, title: String, message: String) {

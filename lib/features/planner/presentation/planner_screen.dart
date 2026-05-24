@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +28,7 @@ class PlannerScreen extends ConsumerStatefulWidget {
 
 class _PlannerScreenState extends ConsumerState<PlannerScreen> {
   late final ScrollController _calendarScrollController;
+  Timer? _ticker;
 
   @override
   void initState() {
@@ -35,10 +37,16 @@ class _PlannerScreenState extends ConsumerState<PlannerScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToToday(animate: false);
     });
+    _ticker = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   @override
   void dispose() {
+    _ticker?.cancel();
     _calendarScrollController.dispose();
     super.dispose();
   }
@@ -388,7 +396,7 @@ class _TodayResetButton extends StatelessWidget {
 }
 
 /// Schedule timeline card with dot, connector line and delete option.
-class _ScheduleCard extends ConsumerWidget {
+class _ScheduleCard extends ConsumerStatefulWidget {
   const _ScheduleCard({
     required this.block,
     this.isFirst = false,
@@ -400,7 +408,74 @@ class _ScheduleCard extends ConsumerWidget {
   final bool isLast;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ScheduleCard> createState() => _ScheduleCardState();
+}
+
+class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+    _pulseAnimation = CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  DateTime? _parseDateTime(String dateString, String timeString) {
+    try {
+      final dateParts = dateString.split('-');
+      if (dateParts.length != 3) return null;
+      final year = int.parse(dateParts[0]);
+      final month = int.parse(dateParts[1]);
+      final day = int.parse(dateParts[2]);
+
+      final timeClean = timeString.trim();
+      final spaceIndex = timeClean.indexOf(' ');
+      if (spaceIndex == -1) return null;
+      final timePart = timeClean.substring(0, spaceIndex);
+      final amPmPart = timeClean.substring(spaceIndex + 1).toUpperCase();
+
+      final timeParts = timePart.split(':');
+      if (timeParts.length != 2) return null;
+      var hour = int.parse(timeParts[0]);
+      final minute = int.parse(timeParts[1]);
+
+      if (amPmPart == 'PM' && hour < 12) {
+        hour += 12;
+      } else if (amPmPart == 'AM' && hour == 12) {
+        hour = 0;
+      }
+
+      return DateTime(year, month, day, hour, minute);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  bool _isBlockActive(ScheduleBlock block) {
+    final start = _parseDateTime(block.dateString, block.startTime);
+    final end = _parseDateTime(block.dateString, block.endTime);
+    if (start == null || end == null) return false;
+    final now = DateTime.now();
+    return now.isAfter(start) && now.isBefore(end);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final block = widget.block;
+    final isFirst = widget.isFirst;
+    final isLast = widget.isLast;
+
     Color? tagColor;
     Color? tagTextColor;
 
@@ -412,6 +487,8 @@ class _ScheduleCard extends ConsumerWidget {
       tagTextColor = VetoColors.emeraldTagText;
     }
 
+    final isActive = _isBlockActive(block);
+
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -422,16 +499,32 @@ class _ScheduleCard extends ConsumerWidget {
             child: Column(
               children: [
                 // Dot
-                Container(
-                  margin: const EdgeInsets.only(top: 24),
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isFirst
-                        ? Colors.white.withValues(alpha: 0.4)
-                        : Colors.white.withValues(alpha: 0.2),
-                  ),
+                AnimatedBuilder(
+                  animation: _pulseAnimation,
+                  builder: (context, child) {
+                    return Container(
+                      margin: const EdgeInsets.only(top: 24),
+                      width: isActive ? 10 : 8,
+                      height: isActive ? 10 : 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isActive
+                            ? VetoColors.secondary.withValues(alpha: 0.6 + 0.4 * _pulseAnimation.value)
+                            : (isFirst
+                                ? Colors.white.withValues(alpha: 0.4)
+                                : Colors.white.withValues(alpha: 0.2)),
+                        boxShadow: isActive
+                            ? [
+                                BoxShadow(
+                                  color: VetoColors.secondary.withValues(alpha: 0.6 * _pulseAnimation.value),
+                                  blurRadius: 8 * _pulseAnimation.value,
+                                  spreadRadius: 2 * _pulseAnimation.value,
+                                ),
+                              ]
+                            : null,
+                      ),
+                    );
+                  },
                 ),
                 // Line
                 if (!isLast)
@@ -449,90 +542,196 @@ class _ScheduleCard extends ConsumerWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: GlassPanel(
-                borderRadius: 12,
-                blurSigma: 48,
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${block.startTime} - ${block.endTime}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: VetoColors.onSurfaceVariant,
-                            height: 20 / 14,
-                          ),
+              child: AnimatedBuilder(
+                animation: _pulseAnimation,
+                builder: (context, child) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(
+                          sigmaX: 48,
+                          sigmaY: 48,
                         ),
-                        Row(
-                          children: [
-                            if (block.tag != null) ...[
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(9999),
-                                  color: tagColor ?? VetoColors.glassWhite10,
-                                  border: Border.all(
-                                    color: (tagTextColor ?? Colors.white)
-                                        .withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                child: Text(
-                                  block.tag!,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: tagTextColor ?? Colors.white,
-                                    height: 16 / 12,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                            IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: VetoColors.error,
-                                size: 18,
-                              ),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () {
-                                ref
-                                    .read(plannerProvider.notifier)
-                                    .deleteScheduleBlock(block.id);
-                              },
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            gradient: isActive
+                                ? LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      VetoColors.orbFuchsia.withValues(alpha: 0.12 + 0.04 * _pulseAnimation.value),
+                                      VetoColors.orbIndigo.withValues(alpha: 0.12 + 0.04 * _pulseAnimation.value),
+                                    ],
+                                  )
+                                : null,
+                            color: isActive
+                                ? null
+                                : Colors.white.withValues(alpha: 0.05),
+                            border: Border.all(
+                              color: isActive
+                                  ? Color.lerp(
+                                      VetoColors.glassBorder,
+                                      VetoColors.secondary.withValues(alpha: 0.7),
+                                      _pulseAnimation.value,
+                                    )!
+                                  : VetoColors.glassBorder,
+                              width: isActive ? 1.5 : 1,
                             ),
-                          ],
+                            boxShadow: [
+                              if (isActive)
+                                BoxShadow(
+                                  color: VetoColors.secondary.withValues(alpha: 0.15 * _pulseAnimation.value),
+                                  blurRadius: 16 + 8 * _pulseAnimation.value,
+                                  spreadRadius: 1 * _pulseAnimation.value,
+                                ),
+                              const BoxShadow(
+                                color: VetoColors.glassInnerGlow,
+                                blurRadius: 1,
+                                offset: Offset(0, 1),
+                                blurStyle: BlurStyle.inner,
+                              ),
+                              const BoxShadow(
+                                color: Color(0x66000000),
+                                blurRadius: 32,
+                                offset: Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: isActive
+                                        ? Row(
+                                            children: [
+                                              Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: VetoColors.secondary.withValues(alpha: 0.6 + 0.4 * _pulseAnimation.value),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: VetoColors.secondary.withValues(alpha: 0.6 * _pulseAnimation.value),
+                                                      blurRadius: 6 * _pulseAnimation.value,
+                                                      spreadRadius: 2 * _pulseAnimation.value,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'ACTIVE NOW  |  ',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: VetoColors.secondary.withValues(alpha: 0.8 + 0.2 * _pulseAnimation.value),
+                                                  letterSpacing: 0.5,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: Text(
+                                                  '${block.startTime} - ${block.endTime}',
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: VetoColors.onSurfaceVariant,
+                                                    height: 20 / 14,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        : Text(
+                                            '${block.startTime} - ${block.endTime}',
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: VetoColors.onSurfaceVariant,
+                                              height: 20 / 14,
+                                            ),
+                                          ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      if (block.tag != null) ...[
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(9999),
+                                            color: tagColor ?? VetoColors.glassWhite10,
+                                            border: Border.all(
+                                              color: (tagTextColor ?? Colors.white)
+                                                  .withValues(alpha: 0.3),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            block.tag!,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              color: tagTextColor ?? Colors.white,
+                                              height: 16 / 12,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          color: VetoColors.error,
+                                          size: 18,
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        onPressed: () {
+                                          ref
+                                              .read(plannerProvider.notifier)
+                                              .deleteScheduleBlock(block.id);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                block.title,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
+                                    ?.copyWith(
+                                      color: Colors.white,
+                                    ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                block.description,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: VetoColors.onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      block.title,
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineMedium
-                          ?.copyWith(
-                            color: Colors.white,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      block.description,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: VetoColors.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
           ),

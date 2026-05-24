@@ -194,6 +194,20 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun scheduleAlarmCompat(alarmManager: AlarmManager, triggerTime: Long, pendingIntent: PendingIntent) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+            } else {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+        } else {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+        }
+    }
+
     private fun schedulePlannerReminders() {
         val context = applicationContext
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
@@ -222,41 +236,51 @@ class MainActivity : FlutterActivity() {
                 val startEpoch = parseDateTimeToEpoch(dateString, startTime) ?: continue
                 val endEpoch = parseDateTimeToEpoch(dateString, endTime) ?: continue
                 
-                // 1. Fire immediate notification if currently active
+                val prepTime = startEpoch - (30 * 60 * 1000)
+
+                // 1. Fire immediate notifications if matching current range
                 if (now in startEpoch until endEpoch) {
-                    Log.d("VetoAlarms", "Schedule active now: $title. Firing immediate reminder.")
-                    fireImmediateReminder(context, id, title, description)
+                    Log.d("VetoAlarms", "Schedule active now: $title. Firing immediate starting_now reminder.")
+                    fireImmediateReminder(context, id, title, description, "starting_now")
+                } else if (now in prepTime until startEpoch) {
+                    Log.d("VetoAlarms", "Schedule starting soon: $title. Firing immediate 30_min_before reminder.")
+                    fireImmediateReminder(context, id, title, description, "30_min_before")
                 }
                 
-                // 2. Schedule future alarm
-                if (startEpoch > now) {
-                    val intent = Intent(context, VetoAlarmReceiver::class.java).apply {
+                // 2. Schedule future alarm 30-min-before
+                if (prepTime > now) {
+                    val intent30 = Intent(context, VetoAlarmReceiver::class.java).apply {
                         putExtra("id", id)
-                        putExtra("title", "Focus Session Starting: $title")
+                        putExtra("title", title)
                         putExtra("description", description)
+                        putExtra("type", "30_min_before")
                     }
-                    
-                    val pendingIntent = PendingIntent.getBroadcast(
+                    val pendingIntent30 = PendingIntent.getBroadcast(
                         context,
-                        id.hashCode(),
-                        intent,
+                        (id + "_30_min_before").hashCode(),
+                        intent30,
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
-                    
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        alarmManager.setExactAndAllowWhileIdle(
-                            AlarmManager.RTC_WAKEUP,
-                            startEpoch,
-                            pendingIntent
-                        )
-                    } else {
-                        alarmManager.setExact(
-                            AlarmManager.RTC_WAKEUP,
-                            startEpoch,
-                            pendingIntent
-                        )
+                    scheduleAlarmCompat(alarmManager, prepTime, pendingIntent30)
+                    Log.d("VetoAlarms", "Scheduled 30-min-before alarm for $title at $prepTime")
+                }
+
+                // 3. Schedule future alarm starting-now
+                if (startEpoch > now) {
+                    val intentStart = Intent(context, VetoAlarmReceiver::class.java).apply {
+                        putExtra("id", id)
+                        putExtra("title", title)
+                        putExtra("description", description)
+                        putExtra("type", "starting_now")
                     }
-                    Log.d("VetoAlarms", "Scheduled future alarm for $title at $startEpoch")
+                    val pendingIntentStart = PendingIntent.getBroadcast(
+                        context,
+                        (id + "_starting_now").hashCode(),
+                        intentStart,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    scheduleAlarmCompat(alarmManager, startEpoch, pendingIntentStart)
+                    Log.d("VetoAlarms", "Scheduled starting-now alarm for $title at $startEpoch")
                 }
             }
         } catch (e: Exception) {
@@ -264,11 +288,12 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun fireImmediateReminder(context: Context, blockId: String, title: String, description: String) {
+    private fun fireImmediateReminder(context: Context, blockId: String, title: String, description: String, type: String) {
         val intent = Intent(context, VetoAlarmReceiver::class.java).apply {
             putExtra("id", blockId)
-            putExtra("title", "Active Focus Session: $title")
+            putExtra("title", title)
             putExtra("description", description)
+            putExtra("type", type)
         }
         context.sendBroadcast(intent)
     }
