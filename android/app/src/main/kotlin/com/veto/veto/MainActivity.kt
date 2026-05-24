@@ -147,9 +147,12 @@ class MainActivity : FlutterActivity() {
                     }
 
                     "getTodayUsageMinutes" -> {
-                        // TODO: Implement UsageStatsManager integration
-                        // For now, return mock data matching the UI
-                        result.success(179) // 2h 59m
+                        try {
+                            val total = getTotalUsageMinutesToday(this)
+                            result.success(total.toInt())
+                        } catch (e: Exception) {
+                            result.success(179) // fallback
+                        }
                     }
 
                     "schedulePlannerReminders" -> {
@@ -158,6 +161,108 @@ class MainActivity : FlutterActivity() {
                             result.success(null)
                         } catch (e: Exception) {
                             result.error("SCHEDULE_FAILED", e.message, null)
+                        }
+                    }
+
+                    "triggerDirectivesReload" -> {
+                        try {
+                            val intent = Intent(VetoAccessibilityService.ACTION_RELOAD_RULES)
+                            intent.setPackage(packageName())
+                            sendBroadcast(intent)
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+
+                    "getInstalledApps" -> {
+                        try {
+                            val pm = packageManager
+                            val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
+                                addCategory(Intent.CATEGORY_LAUNCHER)
+                            }
+                            val resolveInfos = pm.queryIntentActivities(mainIntent, 0)
+                            val appsList = ArrayList<Map<String, String>>()
+                            for (info in resolveInfos) {
+                                val appName = info.loadLabel(pm).toString()
+                                val packageName = info.activityInfo.packageName
+                                appsList.add(mapOf("appName" to appName, "packageName" to packageName))
+                            }
+                            appsList.sortBy { it["appName"]?.lowercase() }
+                            result.success(appsList)
+                        } catch (e: Exception) {
+                            result.error("GET_APPS_FAILED", e.message, null)
+                        }
+                    }
+
+                    "checkNotificationPolicyAccess" -> {
+                        try {
+                            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                            val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                notificationManager.isNotificationPolicyAccessGranted
+                            } else {
+                                true
+                            }
+                            result.success(granted)
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+
+                    "requestNotificationPolicyAccess" -> {
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                startActivity(intent)
+                            }
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+
+                    "setNotificationDND" -> {
+                        try {
+                            val enabled = call.argument<Boolean>("enabled") ?: false
+                            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                if (notificationManager.isNotificationPolicyAccessGranted) {
+                                    notificationManager.setInterruptionFilter(
+                                        if (enabled) android.app.NotificationManager.INTERRUPTION_FILTER_NONE
+                                        else android.app.NotificationManager.INTERRUPTION_FILTER_ALL
+                                    )
+                                    result.success(true)
+                                } else {
+                                    result.success(false)
+                                }
+                            } else {
+                                result.success(true)
+                            }
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+
+                    "checkUsageStatsPermission" -> {
+                        try {
+                            val granted = isUsageStatsPermissionGranted(this)
+                            result.success(granted)
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+
+                    "requestUsageStatsPermission" -> {
+                        try {
+                            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
                         }
                     }
 
@@ -312,6 +417,44 @@ class MainActivity : FlutterActivity() {
                 null
             }
         }
+    }
+
+    private fun isUsageStatsPermissionGranted(context: Context): Boolean {
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                context.packageName
+            )
+        } else {
+            appOps.checkOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                context.packageName
+            )
+        }
+        return mode == android.app.AppOpsManager.MODE_ALLOWED
+    }
+
+    private fun getTotalUsageMinutesToday(context: Context): Long {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+        val calendar = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val startTime = calendar.timeInMillis
+        val endTime = System.currentTimeMillis()
+        val stats = usm.queryUsageStats(android.app.usage.UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
+        var totalMillis = 0L
+        if (stats != null) {
+            for (usageStats in stats) {
+                totalMillis += usageStats.totalTimeInForeground
+            }
+        }
+        return totalMillis / (1000 * 60)
     }
 
     /**

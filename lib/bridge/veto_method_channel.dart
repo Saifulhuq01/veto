@@ -113,6 +113,94 @@ class VetoMethodChannel {
     }
   }
 
+  /// Fetch list of launchable installed apps on the device.
+  Future<List<Map<String, String>>> getInstalledApps() async {
+    try {
+      final List<dynamic>? result = await _channel.invokeMethod<List<dynamic>>('getInstalledApps');
+      if (result == null) return [];
+      return result.map((item) {
+        final map = Map<String, dynamic>.from(item as Map);
+        return {
+          'appName': map['appName'] as String? ?? '',
+          'packageName': map['packageName'] as String? ?? '',
+        };
+      }).toList();
+    } on PlatformException {
+      return [];
+    } on MissingPluginException {
+      return [];
+    }
+  }
+
+  /// Check if Do Not Disturb access is granted.
+  Future<bool> checkNotificationPolicyAccess() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('checkNotificationPolicyAccess');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Launch Do Not Disturb access settings page.
+  Future<void> requestNotificationPolicyAccess() async {
+    try {
+      await _channel.invokeMethod('requestNotificationPolicyAccess');
+    } on PlatformException {
+      // no-op
+    } on MissingPluginException {
+      // no-op
+    }
+  }
+
+  /// Toggle native Do Not Disturb (DND) state.
+  Future<bool> setNotificationDND(bool enabled) async {
+    try {
+      final result = await _channel.invokeMethod<bool>('setNotificationDND', {'enabled': enabled});
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Check if Usage Stats access is granted.
+  Future<bool> checkUsageStatsPermission() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('checkUsageStatsPermission');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Launch Usage Stats access settings page.
+  Future<void> requestUsageStatsPermission() async {
+    try {
+      await _channel.invokeMethod('requestUsageStatsPermission');
+    } on PlatformException {
+      // no-op
+    } on MissingPluginException {
+      // no-op
+    }
+  }
+
+  /// Trigger the accessibility service to reload directives and settings in real time.
+  Future<void> triggerDirectivesReload() async {
+    try {
+      await _channel.invokeMethod('triggerDirectivesReload');
+    } on PlatformException {
+      // ignore
+    } on MissingPluginException {
+      // ignore
+    }
+  }
+
   /// Register callback to trigger lockdown when requested by the native notification action.
   void registerTriggerCallback(void Function() onTrigger) {
     _channel.setMethodCallHandler((call) async {

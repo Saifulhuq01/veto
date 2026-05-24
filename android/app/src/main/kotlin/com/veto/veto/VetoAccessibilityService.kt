@@ -91,30 +91,93 @@ class VetoAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
-        // ── Check if rulesEngine is initialized and lockdown is active ──
-        if (!::rulesEngine.isInitialized || !rulesEngine.isLockdownActive()) return
+        if (!::rulesEngine.isInitialized) return
 
         val packageName = event.packageName?.toString() ?: return
 
-        // ── Fast path: no rules for this package → zero work ──
+        // 1. Strict Mode (Anti-Uninstall protection)
+        if (packageName == "com.android.settings" && isStrictModeEnabled()) {
+            val rootNode = rootInActiveWindow
+            if (rootNode != null) {
+                try {
+                    val vetoNodes = rootNode.findAccessibilityNodeInfosByText("Veto")
+                    if (!vetoNodes.isNullOrEmpty()) {
+                        Log.d(TAG, "Blocking settings page access to Veto configuration")
+                        executeBlock("Strict Mode: Anti-Uninstall Protection")
+                        recycleNodes(vetoNodes)
+                        rootNode.recycle()
+                        return
+                    }
+                } catch (e: Exception) {
+                    // ignore
+                } finally {
+                    try { rootNode.recycle() } catch (e: Exception) {}
+                }
+            }
+        }
+
+        val directivesEnabled = isDirectivesEnabled()
+
+        // 2. Website Blocking in Browsers
+        if (directivesEnabled && isBrowserApp(packageName) && isWebsiteBlockingEnabled()) {
+            val rootNode = rootInActiveWindow
+            if (rootNode != null) {
+                try {
+                    val blockedSites = getBlockedWebsites()
+                    for (site in blockedSites) {
+                        if (site.trim().isEmpty()) continue
+                        val matchingNodes = rootNode.findAccessibilityNodeInfosByText(site)
+                        if (!matchingNodes.isNullOrEmpty()) {
+                            Log.d(TAG, "Blocking website: $site in browser $packageName")
+                            executeBlock("Website Blocked: $site")
+                            recycleNodes(matchingNodes)
+                            rootNode.recycle()
+                            return
+                        }
+                    }
+                } catch (e: Exception) {
+                    // ignore
+                } finally {
+                    try { rootNode.recycle() } catch (e: Exception) {}
+                }
+            }
+        }
+
+        // 3. App Limits Enforcement
+        if (directivesEnabled) {
+            val limits = getAppLimits()
+            val limitRule = limits.firstOrNull { it.packageName == packageName && it.isActive }
+            if (limitRule != null) {
+                val usageMinutes = getAppUsageMinutesToday(this, packageName)
+                if (usageMinutes >= limitRule.limitMinutes) {
+                    Log.d(TAG, "Blocking $packageName because usage $usageMinutes >= limit ${limitRule.limitMinutes}")
+                    executeBlock("Daily Limit Exceeded (${limitRule.limitMinutes}m)")
+                    return
+                }
+            }
+        }
+
+        // 4. Wildcard rules and Deep Blocks
         val targets = cachedRules[packageName]
-        if (targets.isNullOrEmpty()) return
+        if (!targets.isNullOrEmpty()) {
+            if (targets.contains("*")) {
+                // Wildcard app block: only runs if lockdown is active
+                if (rulesEngine.isLockdownActive()) {
+                    Log.d(TAG, "Blocking entire application $packageName immediately due to wildcard rule during active lockdown")
+                    executeBlock("Application Blocked")
+                    return
+                }
+            } else if (directivesEnabled) {
+                // Deep block rule: runs if directives are enabled (even if lockdown is not active)
+                pendingRunnable?.let { handler.removeCallbacks(it) }
 
-        // ── Wildcard match: block the entire app immediately ──
-        if (targets.contains("*")) {
-            Log.d(TAG, "Blocking entire application $packageName immediately due to wildcard rule")
-            executeBlock("Application Blocked")
-            return
+                val runnable = Runnable {
+                    performNodeScan(packageName, targets)
+                }
+                pendingRunnable = runnable
+                handler.postDelayed(runnable, DEBOUNCE_MS)
+            }
         }
-
-        // ── Debounce: cancel pending, schedule new ──
-        pendingRunnable?.let { handler.removeCallbacks(it) }
-
-        val runnable = Runnable {
-            performNodeScan(packageName, targets)
-        }
-        pendingRunnable = runnable
-        handler.postDelayed(runnable, DEBOUNCE_MS)
     }
 
     /**
@@ -431,6 +494,91 @@ class VetoAccessibilityService : AccessibilityService() {
     private fun dpToPx(dp: Int): Int {
         val density = resources.displayMetrics.density
         return (dp * density).toInt()
+    }
+
+    class AppLimitRule(
+        val packageName: String,
+        val limitMinutes: Int,
+        val isActive: Boolean
+    )
+
+    private fun isDirectivesEnabled(): Boolean {
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        return prefs.getBoolean("flutter.system_directives_enabled", true)
+    }
+
+    private fun isWebsiteBlockingEnabled(): Boolean {
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        return prefs.getBoolean("flutter.block_websites_enabled", false)
+    }
+
+    private fun isStrictModeEnabled(): Boolean {
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        return prefs.getBoolean("flutter.strict_mode_enabled", false)
+    }
+
+    private fun getBlockedWebsites(): List<String> {
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val jsonStr = prefs.getString("flutter.blocked_websites", null) ?: return emptyList()
+        return try {
+            val arr = org.json.JSONArray(jsonStr)
+            val list = mutableListOf<String>()
+            for (i in 0 until arr.length()) {
+                list.add(arr.getString(i))
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun isBrowserApp(packageName: String): Boolean {
+        return packageName == "com.android.chrome" ||
+               packageName == "org.mozilla.firefox" ||
+               packageName == "com.sec.android.app.sbrowser" ||
+               packageName == "com.opera.browser" ||
+               packageName == "com.microsoft.emmx" ||
+               packageName == "com.android.browser"
+    }
+
+    private fun getAppUsageMinutesToday(context: Context, packageName: String): Long {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+        val calendar = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val startTime = calendar.timeInMillis
+        val endTime = System.currentTimeMillis()
+        val stats = usm.queryUsageStats(android.app.usage.UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
+        if (stats != null) {
+            for (usageStats in stats) {
+                if (usageStats.packageName == packageName) {
+                    return usageStats.totalTimeInForeground / (1000 * 60)
+                }
+            }
+        }
+        return 0L
+    }
+
+    private fun getAppLimits(): List<AppLimitRule> {
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val jsonStr = prefs.getString("flutter.veto_app_limits", null) ?: return emptyList()
+        return try {
+            val arr = org.json.JSONArray(jsonStr)
+            val list = mutableListOf<AppLimitRule>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val packName = obj.getString("packageName")
+                val limit = obj.getInt("dailyLimitMinutes")
+                val active = obj.optBoolean("isActive", true)
+                list.add(AppLimitRule(packName, limit, active))
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     /**

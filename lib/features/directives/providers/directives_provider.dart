@@ -42,6 +42,7 @@ class AppLimitRule {
     required this.dailyLimitMinutes,
     this.usedMinutes = 0,
     this.iconUrl,
+    this.isActive = true,
   });
 
   final String id;
@@ -50,6 +51,7 @@ class AppLimitRule {
   final int dailyLimitMinutes;
   final int usedMinutes;
   final String? iconUrl;
+  final bool isActive;
 
   String get limitDisplay {
     final h = dailyLimitMinutes ~/ 60;
@@ -66,6 +68,7 @@ class AppLimitRule {
     int? dailyLimitMinutes,
     int? usedMinutes,
     String? iconUrl,
+    bool? isActive,
   }) {
     return AppLimitRule(
       id: id ?? this.id,
@@ -74,6 +77,7 @@ class AppLimitRule {
       dailyLimitMinutes: dailyLimitMinutes ?? this.dailyLimitMinutes,
       usedMinutes: usedMinutes ?? this.usedMinutes,
       iconUrl: iconUrl ?? this.iconUrl,
+      isActive: isActive ?? this.isActive,
     );
   }
 
@@ -85,6 +89,7 @@ class AppLimitRule {
       'dailyLimitMinutes': dailyLimitMinutes,
       'usedMinutes': usedMinutes,
       'iconUrl': iconUrl,
+      'isActive': isActive,
     };
   }
 
@@ -96,6 +101,7 @@ class AppLimitRule {
       dailyLimitMinutes: json['dailyLimitMinutes'] as int,
       usedMinutes: json['usedMinutes'] as int? ?? 0,
       iconUrl: json['iconUrl'] as String?,
+      isActive: json['isActive'] as bool? ?? true,
     );
   }
 }
@@ -225,6 +231,7 @@ class DirectivesNotifier extends StateNotifier<DirectivesState> {
     final updated = [...state.appLimits, limit];
     state = state.copyWith(appLimits: updated);
     await _saveLimitsToPrefs(updated);
+    await _channel.triggerDirectivesReload();
   }
 
   /// Delete an existing app limit
@@ -232,6 +239,21 @@ class DirectivesNotifier extends StateNotifier<DirectivesState> {
     final updated = state.appLimits.where((l) => l.id != id).toList();
     state = state.copyWith(appLimits: updated);
     await _saveLimitsToPrefs(updated);
+    await _channel.triggerDirectivesReload();
+  }
+
+  /// Toggle an app limit rule active state
+  Future<void> toggleAppLimit(String id) async {
+    final updated = state.appLimits.map((limit) {
+      if (limit.id == id) {
+        return limit.copyWith(isActive: !limit.isActive);
+      }
+      return limit;
+    }).toList();
+
+    state = state.copyWith(appLimits: updated);
+    await _saveLimitsToPrefs(updated);
+    await _channel.triggerDirectivesReload();
   }
 
   Future<void> _saveLimitsToPrefs(List<AppLimitRule> list) async {
@@ -245,3 +267,103 @@ final directivesProvider =
     StateNotifierProvider<DirectivesNotifier, DirectivesState>(
   (ref) => DirectivesNotifier(VetoMethodChannel()),
 );
+
+/// StateProvider for Master System Directives Switch
+final systemDirectivesEnabledProvider = StateNotifierProvider<SharedPreferencesBoolNotifier, bool>((ref) {
+  return SharedPreferencesBoolNotifier('system_directives_enabled', true);
+});
+
+/// StateProvider for Website Blocking Enable/Disable Switch
+final blockWebsitesEnabledProvider = StateNotifierProvider<SharedPreferencesBoolNotifier, bool>((ref) {
+  return SharedPreferencesBoolNotifier('block_websites_enabled', false);
+});
+
+/// StateProvider for Strict Mode Enable/Disable Switch
+final strictModeEnabledProvider = StateNotifierProvider<SharedPreferencesBoolNotifier, bool>((ref) {
+  return SharedPreferencesBoolNotifier('strict_mode_enabled', false);
+});
+
+/// StateProvider for Notification Blocking Enable/Disable Switch (DND Switch)
+final blockNotificationsEnabledProvider = StateNotifierProvider<SharedPreferencesBoolNotifier, bool>((ref) {
+  return SharedPreferencesBoolNotifier('block_notifications_enabled', false);
+});
+
+/// StateNotifier to save/load bools from SharedPreferences and notify native side
+class SharedPreferencesBoolNotifier extends StateNotifier<bool> {
+  SharedPreferencesBoolNotifier(this.prefKey, this.defaultValue) : super(defaultValue) {
+    _load();
+  }
+
+  final String prefKey;
+  final bool defaultValue;
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = prefs.getBool('veto_$prefKey') ?? defaultValue;
+  }
+
+  Future<void> toggle() async {
+    final newValue = !state;
+    state = newValue;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('veto_$prefKey', newValue);
+    // Sync to SharedPreferences for access from Kotlin
+    await prefs.setBool('flutter.$prefKey', newValue);
+    
+    // If it's the DND toggle, update native DND state too!
+    if (prefKey == 'block_notifications_enabled') {
+      await VetoMethodChannel().setNotificationDND(newValue);
+    }
+    
+    await VetoMethodChannel().triggerDirectivesReload();
+  }
+}
+
+/// StateProvider for Blocked Websites List
+final blockedWebsitesProvider = StateNotifierProvider<BlockedWebsitesNotifier, List<String>>((ref) {
+  return BlockedWebsitesNotifier();
+});
+
+class BlockedWebsitesNotifier extends StateNotifier<List<String>> {
+  BlockedWebsitesNotifier() : super([]) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString('veto_blocked_websites');
+    if (jsonStr != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(jsonStr);
+        state = decoded.cast<String>();
+      } catch (_) {}
+    } else {
+      // Seed default blocked websites
+      state = ['facebook.com', 'tiktok.com', 'instagram.com', 'twitter.com', 'x.com'];
+      await _save(state);
+    }
+  }
+
+  Future<void> _save(List<String> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = jsonEncode(list);
+    await prefs.setString('veto_blocked_websites', jsonStr);
+    await prefs.setString('flutter.blocked_websites', jsonStr);
+  }
+
+  Future<void> addWebsite(String domain) async {
+    final clean = domain.trim().toLowerCase();
+    if (clean.isEmpty || state.contains(clean)) return;
+    final updated = [...state, clean];
+    state = updated;
+    await _save(updated);
+    await VetoMethodChannel().triggerDirectivesReload();
+  }
+
+  Future<void> removeWebsite(String domain) async {
+    final updated = state.where((d) => d != domain).toList();
+    state = updated;
+    await _save(updated);
+    await VetoMethodChannel().triggerDirectivesReload();
+  }
+}
