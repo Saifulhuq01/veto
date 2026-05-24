@@ -6,21 +6,88 @@ import '../../../core/widgets/glass_button.dart';
 import '../../../core/widgets/glass_panel.dart';
 import '../providers/planner_provider.dart';
 
-/// Provider to track currently selected day index (0 = Mon, ..., 6 = Sun)
-final selectedDayProvider = StateProvider<int>((ref) => 1); // Tue selected by default
+/// Provider to track currently selected date
+final selectedDateProvider = StateProvider<DateTime>((ref) {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
+});
+
+/// Helper to format date to YYYY-MM-DD
+String _formatDateToYYYYMMDD(DateTime date) {
+  return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+}
 
 /// Planner (Schedule) screen — daily focus block management.
-class PlannerScreen extends ConsumerWidget {
+class PlannerScreen extends ConsumerStatefulWidget {
   const PlannerScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selectedDay = ref.watch(selectedDayProvider);
+  ConsumerState<PlannerScreen> createState() => _PlannerScreenState();
+}
+
+class _PlannerScreenState extends ConsumerState<PlannerScreen> {
+  late final ScrollController _calendarScrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _calendarScrollController = ScrollController();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToToday(animate: false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _calendarScrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToToday({bool animate = true}) {
+    if (!_calendarScrollController.hasClients) return;
+
+    final now = DateTime.now();
+    final todayIndex = now.day - 1; // 0-indexed day
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Item width is 64 + 12 separator = 76.
+    const itemWidth = 76.0;
+    // Offset calculation: center the item and account for screen margins (padding)
+    final targetOffset = (todayIndex * itemWidth) - (screenWidth / 2) + 32.0 + 24.0;
+
+    final maxScroll = _calendarScrollController.position.maxScrollExtent;
+    final double offset = targetOffset.clamp(0.0, maxScroll);
+
+    if (animate) {
+      _calendarScrollController.animateTo(
+        offset,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      _calendarScrollController.jumpTo(offset);
+    }
+  }
+
+  String _getCurrentFormattedDate() {
+    final now = DateTime.now();
+    final weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return '${weekdays[now.weekday - 1]}, ${now.day} ${months[now.month - 1]} ${now.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedDate = ref.watch(selectedDateProvider);
+    final selectedDateStr = _formatDateToYYYYMMDD(selectedDate);
     final plannerState = ref.watch(plannerProvider);
 
-    // Filter schedules for the selected day index
+    // Filter schedules for the selected calendar date
     final filteredSchedules = plannerState.schedules
-        .where((s) => s.dayIndex == selectedDay)
+        .where((s) => s.dateString == selectedDateStr)
         .toList();
 
     return SafeArea(
@@ -36,6 +103,16 @@ class PlannerScreen extends ConsumerWidget {
                     color: Colors.white,
                   ),
             ),
+            const SizedBox(height: 4),
+            Text(
+              _getCurrentFormattedDate(),
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: VetoColors.secondary,
+                letterSpacing: 0.5,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
               'Manage your daily focus blocks.',
@@ -45,8 +122,23 @@ class PlannerScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
 
-            // ── Horizontal calendar strip ──
-            const _CalendarStrip(),
+            // ── Horizontal calendar strip + Today Snap Button ──
+            Row(
+              children: [
+                Expanded(
+                  child: _CalendarStrip(scrollController: _calendarScrollController),
+                ),
+                const SizedBox(width: 10),
+                _TodayResetButton(
+                  onTap: () {
+                    final today = DateTime.now();
+                    ref.read(selectedDateProvider.notifier).state =
+                        DateTime(today.year, today.month, today.day);
+                    _scrollToToday(animate: true);
+                  },
+                ),
+              ],
+            ),
             const SizedBox(height: 32),
 
             // ── Schedule timeline ──
@@ -119,23 +211,24 @@ class PlannerScreen extends ConsumerWidget {
   }
 }
 
-/// Horizontal day calendar strip.
+/// Horizontal day calendar strip for the entire month.
 class _CalendarStrip extends ConsumerWidget {
-  const _CalendarStrip();
-
-  static const _days = [
-    _DayData(label: 'MON', date: '12', index: 0),
-    _DayData(label: 'TUE', date: '13', index: 1),
-    _DayData(label: 'WED', date: '14', index: 2),
-    _DayData(label: 'THU', date: '15', index: 3),
-    _DayData(label: 'FRI', date: '16', index: 4),
-    _DayData(label: 'SAT', date: '17', index: 5),
-    _DayData(label: 'SUN', date: '18', index: 6),
-  ];
+  const _CalendarStrip({required this.scrollController});
+  final ScrollController scrollController;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedDay = ref.watch(selectedDayProvider);
+    final selectedDate = ref.watch(selectedDateProvider);
+    final now = DateTime.now();
+
+    // Generate dates for the current month
+    final lastDayOfMonth = DateTime(now.year, now.month + 1, 0).day;
+    final List<DateTime> days = List.generate(
+      lastDayOfMonth,
+      (index) => DateTime(now.year, now.month, index + 1),
+    );
+
+    final weekdaysShort = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
     return SizedBox(
       height: 80,
@@ -148,34 +241,47 @@ class _CalendarStrip extends ConsumerWidget {
               Colors.transparent,
               VetoColors.canvasBase,
             ],
-            stops: [0.0, 0.05, 0.95, 1.0],
+            stops: [0.0, 0.03, 0.97, 1.0],
           ).createShader(bounds);
         },
         blendMode: BlendMode.dstOut,
         child: ListView.separated(
+          controller: scrollController,
           scrollDirection: Axis.horizontal,
-          itemCount: _days.length,
+          itemCount: days.length,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           separatorBuilder: (_, __) => const SizedBox(width: 12),
           itemBuilder: (context, index) {
-            final day = _days[index];
-            final isActive = day.index == selectedDay;
+            final dayDate = days[index];
+            final isToday = dayDate.day == now.day &&
+                dayDate.month == now.month &&
+                dayDate.year == now.year;
+            final isSelected = dayDate.day == selectedDate.day &&
+                dayDate.month == selectedDate.month &&
+                dayDate.year == selectedDate.year;
+
+            final dayLabel = weekdaysShort[dayDate.weekday - 1];
 
             return GestureDetector(
-              onTap: () => ref.read(selectedDayProvider.notifier).state = day.index,
+              onTap: () {
+                ref.read(selectedDateProvider.notifier).state = dayDate;
+              },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 width: 64,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  color: isActive
-                      ? VetoColors.glassWhite10
-                      : VetoColors.glassWhite5,
+                  color: isSelected
+                      ? VetoColors.glassWhite15
+                      : (isToday ? VetoColors.glassWhite10 : VetoColors.glassWhite5),
                   border: Border.all(
-                    color: isActive
-                        ? Colors.white.withValues(alpha: 0.2)
-                        : Colors.white.withValues(alpha: 0.05),
+                    color: isSelected
+                        ? VetoColors.secondary.withValues(alpha: 0.5)
+                        : (isToday
+                            ? Colors.white.withValues(alpha: 0.2)
+                            : Colors.white.withValues(alpha: 0.05)),
                   ),
-                  boxShadow: isActive
+                  boxShadow: isSelected
                       ? [
                           const BoxShadow(
                             color: VetoColors.glassInnerGlow,
@@ -190,35 +296,35 @@ class _CalendarStrip extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      day.label,
+                      dayLabel,
                       style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: isActive
-                            ? Colors.white
-                            : VetoColors.onSurfaceVariant,
+                        fontSize: 10,
+                        fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w500,
+                        color: isSelected
+                            ? VetoColors.secondary
+                            : (isToday ? Colors.white : VetoColors.onSurfaceVariant),
                         letterSpacing: 1.0,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      day.date,
+                      dayDate.day.toString(),
                       style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w600,
-                        color: isActive
+                        fontSize: 22,
+                        fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w600,
+                        color: isSelected
                             ? Colors.white
-                            : VetoColors.onSurface,
+                            : (isToday ? VetoColors.secondary : VetoColors.onSurface),
                       ),
                     ),
-                    if (isActive)
+                    if (isSelected)
                       Container(
                         margin: const EdgeInsets.only(top: 4),
                         width: 4,
                         height: 4,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white,
+                          color: VetoColors.secondary,
                         ),
                       ),
                   ],
@@ -232,11 +338,53 @@ class _CalendarStrip extends ConsumerWidget {
   }
 }
 
-class _DayData {
-  const _DayData({required this.label, required this.date, required this.index});
-  final String label;
-  final String date;
-  final int index;
+/// Mini glassmorphic snap-back-to-today button.
+class _TodayResetButton extends StatelessWidget {
+  const _TodayResetButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      borderRadius: 12,
+      blurSigma: 24,
+      padding: EdgeInsets.zero,
+      child: Tooltip(
+        message: 'Back to Today',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+             child: const SizedBox(
+              width: 48,
+              height: 80, // Matches calendar strip cell height
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.today_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'TODAY',
+                    style: TextStyle(
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                      color: VetoColors.secondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Schedule timeline card with dot, connector line and delete option.
@@ -479,13 +627,14 @@ class _AddScheduleSheetState extends ConsumerState<_AddScheduleSheet> {
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
   String? _selectedTagType; // 'focus', 'recovery', or null
-  int? _selectedDayIndex;
+  late DateTime _selectedDate;
+  bool _repeatUntilMonthEnd = false;
 
   @override
   void initState() {
     super.initState();
-    // Default day index to currently selected day on screen
-    _selectedDayIndex = ref.read(selectedDayProvider);
+    // Default to the currently selected date from the calendar strip
+    _selectedDate = ref.read(selectedDateProvider);
   }
 
   @override
@@ -500,6 +649,12 @@ class _AddScheduleSheetState extends ConsumerState<_AddScheduleSheet> {
     final min = time.minute.toString().padLeft(2, '0');
     final period = time.period == DayPeriod.am ? 'AM' : 'PM';
     return '${hour.toString().padLeft(2, '0')}:$min $period';
+  }
+
+  String _formatDateDisplay(DateTime date) {
+    final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${weekdays[date.weekday - 1]}, ${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
   Future<void> _selectTime(bool isStart) async {
@@ -528,6 +683,34 @@ class _AddScheduleSheetState extends ConsumerState<_AddScheduleSheet> {
         } else {
           _endTime = picked;
         }
+      });
+    }
+  }
+
+  Future<void> _selectDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(now.year, now.month, 1),
+      lastDate: DateTime(now.year, now.month + 2, 0), // Allow selection up to end of next month
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.white,
+              onPrimary: Colors.black,
+              surface: VetoColors.surface,
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
       });
     }
   }
@@ -616,27 +799,29 @@ class _AddScheduleSheetState extends ConsumerState<_AddScheduleSheet> {
                 ),
                 const SizedBox(height: 16),
 
-                // Day Selection
-                const Text('Day of Week', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                // Date Selection
+                const Text('Schedule Date', style: TextStyle(color: Colors.white70, fontSize: 13)),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: List.generate(7, (idx) {
-                    final daysShort = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-                    final isSel = _selectedDayIndex == idx;
-                    return ChoiceChip(
-                      label: Text(daysShort[idx]),
-                      selected: isSel,
-                      selectedColor: Colors.white12,
-                      backgroundColor: Colors.transparent,
-                      checkmarkColor: Colors.white,
-                      labelStyle: TextStyle(color: isSel ? Colors.white : Colors.white38),
-                      side: BorderSide(
-                        color: isSel ? Colors.white38 : VetoColors.glassBorder,
-                      ),
-                      onSelected: (_) => setState(() => _selectedDayIndex = idx),
-                    );
-                  }),
+                InkWell(
+                  onTap: _selectDate,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: VetoColors.glassBorder),
+                      color: VetoColors.glassWhite5,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _formatDateDisplay(_selectedDate),
+                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
+                        ),
+                        const Icon(Icons.calendar_month, color: VetoColors.secondary, size: 20),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
 
@@ -651,6 +836,7 @@ class _AddScheduleSheetState extends ConsumerState<_AddScheduleSheet> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: VetoColors.glassBorder),
+                            color: VetoColors.glassWhite5,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -672,6 +858,7 @@ class _AddScheduleSheetState extends ConsumerState<_AddScheduleSheet> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: VetoColors.glassBorder),
+                            color: VetoColors.glassWhite5,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -718,6 +905,44 @@ class _AddScheduleSheetState extends ConsumerState<_AddScheduleSheet> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 20),
+
+                // Recurrence option
+                const Divider(color: VetoColors.glassBorder, height: 1),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Repeat Daily Until Month End',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Schedule on all upcoming days this month',
+                          style: TextStyle(
+                            color: VetoColors.onSurfaceVariant,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Switch(
+                      value: _repeatUntilMonthEnd,
+                      activeColor: VetoColors.secondary,
+                      onChanged: (val) {
+                        setState(() => _repeatUntilMonthEnd = val);
+                      },
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 32),
 
                 // Actions
@@ -740,18 +965,45 @@ class _AddScheduleSheetState extends ConsumerState<_AddScheduleSheet> {
                                 ? 'High Focus'
                                 : (_selectedTagType == 'recovery' ? 'Recovery' : null);
 
-                            final newBlock = ScheduleBlock(
-                              id: DateTime.now().millisecondsSinceEpoch.toString(),
-                              dayIndex: _selectedDayIndex ?? 1,
-                              startTime: _formatTime(_startTime),
-                              endTime: _formatTime(_endTime),
-                              title: _titleController.text,
-                              description: _descController.text,
-                              tag: tagStr,
-                              tagType: _selectedTagType,
-                            );
+                            if (_repeatUntilMonthEnd) {
+                              final List<ScheduleBlock> recurringBlocks = [];
+                              final lastDayOfMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
+                              final startDay = _selectedDate.day;
 
-                            ref.read(plannerProvider.notifier).addScheduleBlock(newBlock);
+                              for (int day = startDay; day <= lastDayOfMonth; day++) {
+                                final blockDate = DateTime(_selectedDate.year, _selectedDate.month, day);
+                                final blockDateStr = _formatDateToYYYYMMDD(blockDate);
+                                final uniqueId = '${DateTime.now().millisecondsSinceEpoch}_$day';
+
+                                recurringBlocks.add(ScheduleBlock(
+                                  id: uniqueId,
+                                  dateString: blockDateStr,
+                                  startTime: _formatTime(_startTime),
+                                  endTime: _formatTime(_endTime),
+                                  title: _titleController.text,
+                                  description: _descController.text,
+                                  tag: tagStr,
+                                  tagType: _selectedTagType,
+                                ));
+                              }
+
+                              ref.read(plannerProvider.notifier).addScheduleBlocks(recurringBlocks);
+                            } else {
+                              final blockDateStr = _formatDateToYYYYMMDD(_selectedDate);
+                              final newBlock = ScheduleBlock(
+                                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                dateString: blockDateStr,
+                                startTime: _formatTime(_startTime),
+                                endTime: _formatTime(_endTime),
+                                title: _titleController.text,
+                                description: _descController.text,
+                                tag: tagStr,
+                                tagType: _selectedTagType,
+                              );
+
+                              ref.read(plannerProvider.notifier).addScheduleBlock(newBlock);
+                            }
+
                             Navigator.pop(context);
                           }
                         },

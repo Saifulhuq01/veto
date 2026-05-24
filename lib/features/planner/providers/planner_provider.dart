@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ScheduleBlock {
   const ScheduleBlock({
     required this.id,
-    required this.dayIndex, // 0 = Mon, 1 = Tue, ..., 6 = Sun
+    required this.dateString, // "YYYY-MM-DD"
     required this.startTime,
     required this.endTime,
     required this.title,
@@ -16,7 +16,7 @@ class ScheduleBlock {
   });
 
   final String id;
-  final int dayIndex;
+  final String dateString;
   final String startTime;
   final String endTime;
   final String title;
@@ -27,7 +27,7 @@ class ScheduleBlock {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'dayIndex': dayIndex,
+      'dateString': dateString,
       'startTime': startTime,
       'endTime': endTime,
       'title': title,
@@ -40,7 +40,7 @@ class ScheduleBlock {
   factory ScheduleBlock.fromJson(Map<String, dynamic> json) {
     return ScheduleBlock(
       id: json['id'] as String,
-      dayIndex: json['dayIndex'] as int,
+      dateString: json['dateString'] as String? ?? _getTodayDateString(),
       startTime: json['startTime'] as String,
       endTime: json['endTime'] as String,
       title: json['title'] as String,
@@ -48,6 +48,11 @@ class ScheduleBlock {
       tag: json['tag'] as String?,
       tagType: json['tagType'] as String?,
     );
+  }
+
+  static String _getTodayDateString() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 }
 
@@ -84,11 +89,12 @@ class PlannerNotifier extends StateNotifier<PlannerState> {
     final jsonStr = prefs.getString(_prefsKey);
 
     if (jsonStr == null) {
-      // Seed default mockup schedules for Tuesday (dayIndex: 1)
+      // Seed default mockup schedules for today
+      final todayStr = _getTodayDateString();
       final defaults = [
-        const ScheduleBlock(
+        ScheduleBlock(
           id: 'default_1',
-          dayIndex: 1,
+          dateString: todayStr,
           startTime: '09:00 AM',
           endTime: '11:30 AM',
           title: 'Deep Work Protocol',
@@ -97,9 +103,9 @@ class PlannerNotifier extends StateNotifier<PlannerState> {
           tag: 'High Focus',
           tagType: 'focus',
         ),
-        const ScheduleBlock(
+        ScheduleBlock(
           id: 'default_2',
-          dayIndex: 1,
+          dateString: todayStr,
           startTime: '12:00 PM',
           endTime: '01:00 PM',
           title: 'Lunch & Walk',
@@ -107,9 +113,9 @@ class PlannerNotifier extends StateNotifier<PlannerState> {
           tag: 'Recovery',
           tagType: 'recovery',
         ),
-        const ScheduleBlock(
+        ScheduleBlock(
           id: 'default_3',
-          dayIndex: 1,
+          dateString: todayStr,
           startTime: '02:00 PM',
           endTime: '03:00 PM',
           title: 'Team Sync',
@@ -132,9 +138,21 @@ class PlannerNotifier extends StateNotifier<PlannerState> {
     }
   }
 
+  static String _getTodayDateString() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
   /// Add a new schedule block
   Future<void> addScheduleBlock(ScheduleBlock block) async {
     final updated = [...state.schedules, block];
+    state = state.copyWith(schedules: updated);
+    await _saveToPrefs(updated);
+  }
+
+  /// Add multiple schedule blocks in bulk (recurrence creation)
+  Future<void> addScheduleBlocks(List<ScheduleBlock> blocks) async {
+    final updated = [...state.schedules, ...blocks];
     state = state.copyWith(schedules: updated);
     await _saveToPrefs(updated);
   }
