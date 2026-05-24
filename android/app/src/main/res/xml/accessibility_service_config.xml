@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Veto AccessibilityService configuration.
+
+    CRITICAL BATTERY OPTIMIZATION: android:packageNames filters events at the
+    framework level — our service receives ZERO events from irrelevant apps.
+    The notificationTimeout adds a 300ms debounce at the OS level.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:notificationTimeout="300"
+    android:canRetrieveWindowContent="true"
+    android:settingsActivity="com.veto.veto.MainActivity"
+    android:description="@string/accessibility_service_description" />

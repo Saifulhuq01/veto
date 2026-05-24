@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Veto uses accessibility to detect and block distracting content like YouTube Shorts and Instagram Reels within apps. It does not collect, store, or transmit any personal data.</string>
+</resources>
