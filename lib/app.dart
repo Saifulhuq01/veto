@@ -1,11 +1,14 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'bridge/veto_method_channel.dart';
 import 'core/theme/spatial_glass_theme.dart';
 import 'core/theme/veto_colors.dart';
 import 'core/widgets/ambient_background.dart';
 import 'core/widgets/floating_nav_island.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
+import 'features/dashboard/providers/timer_provider.dart';
 import 'features/directives/presentation/directives_screen.dart';
 import 'features/planner/presentation/planner_screen.dart';
 
@@ -27,14 +30,14 @@ class VetoApp extends StatelessWidget {
 
 /// Main shell with ambient background, floating top nav, content pages,
 /// and floating bottom nav island.
-class VetoShell extends StatefulWidget {
+class VetoShell extends ConsumerStatefulWidget {
   const VetoShell({super.key});
 
   @override
-  State<VetoShell> createState() => _VetoShellState();
+  ConsumerState<VetoShell> createState() => _VetoShellState();
 }
 
-class _VetoShellState extends State<VetoShell> {
+class _VetoShellState extends ConsumerState<VetoShell> {
   int _currentIndex = 0;
 
   static const _pages = [
@@ -54,6 +57,15 @@ class _VetoShellState extends State<VetoShell> {
       systemNavigationBarIconBrightness: Brightness.light,
     ));
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+    // Register native trigger lockdown callback
+    VetoMethodChannel().registerTriggerCallback(() {
+      ref.read(timerProvider.notifier).start();
+      // Snap to Dashboard (index 0) if not there
+      if (mounted && _currentIndex != 0) {
+        setState(() => _currentIndex = 0);
+      }
+    });
   }
 
   @override

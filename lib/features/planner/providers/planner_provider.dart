@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../bridge/veto_method_channel.dart';
 
 /// Schedule Block model representing a focus slot in the daily planner.
 class ScheduleBlock {
@@ -148,6 +149,7 @@ class PlannerNotifier extends StateNotifier<PlannerState> {
     final updated = [...state.schedules, block];
     state = state.copyWith(schedules: updated);
     await _saveToPrefs(updated);
+    await VetoMethodChannel().schedulePlannerReminders();
   }
 
   /// Add multiple schedule blocks in bulk (recurrence creation)
@@ -155,6 +157,7 @@ class PlannerNotifier extends StateNotifier<PlannerState> {
     final updated = [...state.schedules, ...blocks];
     state = state.copyWith(schedules: updated);
     await _saveToPrefs(updated);
+    await VetoMethodChannel().schedulePlannerReminders();
   }
 
   /// Delete an existing schedule block by ID
@@ -162,6 +165,7 @@ class PlannerNotifier extends StateNotifier<PlannerState> {
     final updated = state.schedules.where((s) => s.id != id).toList();
     state = state.copyWith(schedules: updated);
     await _saveToPrefs(updated);
+    await VetoMethodChannel().schedulePlannerReminders();
   }
 
   Future<void> _saveToPrefs(List<ScheduleBlock> list) async {

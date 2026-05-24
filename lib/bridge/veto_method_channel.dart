@@ -101,4 +101,24 @@ class VetoMethodChannel {
       return 0;
     }
   }
+
+  /// Sync all scheduled reminders to the native AlarmManager.
+  Future<void> schedulePlannerReminders() async {
+    try {
+      await _channel.invokeMethod('schedulePlannerReminders');
+    } on PlatformException catch (e) {
+      print('VetoMethodChannel.schedulePlannerReminders failed: ${e.message}');
+    } on MissingPluginException {
+      // expected on non-Android
+    }
+  }
+
+  /// Register callback to trigger lockdown when requested by the native notification action.
+  void registerTriggerCallback(void Function() onTrigger) {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'triggerLockdown') {
+        onTrigger();
+      }
+    });
+  }
 }

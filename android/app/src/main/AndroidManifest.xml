@@ -16,6 +16,9 @@
     <!-- Required for notifications on API 33+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Required to schedule exact reminders with AlarmManager -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <application
         android:label="Veto"
         android:name="${applicationName}"
@@ -55,6 +58,12 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <!-- Veto Alarm Receiver — deep focus planner reminders -->
+        <receiver
+            android:name=".VetoAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
 
         <!-- Disable Impeller (Vulkan) to fix GPU allocation crashes with heavy BackdropFilters on Oppo/OnePlus -->
         <meta-data
