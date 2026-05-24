@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../bridge/veto_method_channel.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Immutable timer state — strictly no mutable fields.
 class TimerState {
@@ -62,11 +63,27 @@ class TimerNotifier extends StateNotifier<TimerState> {
   Timer? _timer;
   final _channel = VetoMethodChannel();
 
+  Future<void> _saveLockdownEndTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final endEpoch = DateTime.now().millisecondsSinceEpoch + (state.remainingSeconds * 1000);
+      await prefs.setInt('lockdown_end_time', endEpoch);
+    } catch (_) {}
+  }
+
+  Future<void> _clearLockdownEndTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('lockdown_end_time');
+    } catch (_) {}
+  }
+
   void start() {
     if (state.isRunning && !state.isPaused) return;
 
     state = state.copyWith(isRunning: true, isPaused: false);
     _channel.setLockdownActive(true);
+    _saveLockdownEndTime();
 
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -78,6 +95,7 @@ class TimerNotifier extends StateNotifier<TimerState> {
           remainingSeconds: 0,
         );
         _channel.setLockdownActive(false);
+        _clearLockdownEndTime();
         return;
       }
       state = state.copyWith(
@@ -90,6 +108,7 @@ class TimerNotifier extends StateNotifier<TimerState> {
     _timer?.cancel();
     state = state.copyWith(isPaused: true);
     _channel.setLockdownActive(false);
+    _clearLockdownEndTime();
   }
 
   void resume() {
@@ -101,6 +120,7 @@ class TimerNotifier extends StateNotifier<TimerState> {
     _timer?.cancel();
     state = TimerState.initial();
     _channel.setLockdownActive(false);
+    _clearLockdownEndTime();
   }
 
   void setDuration(int minutes) {
@@ -113,6 +133,7 @@ class TimerNotifier extends StateNotifier<TimerState> {
       isPaused: false,
     );
     _channel.setLockdownActive(false);
+    _clearLockdownEndTime();
   }
 
   @override

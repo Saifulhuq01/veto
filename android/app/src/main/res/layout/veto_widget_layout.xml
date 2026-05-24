@@ -1,52 +1,168 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
+    android:orientation="vertical"
     android:padding="16dp">
 
-    <LinearLayout
+    <!-- Header Row: Title & Status Indicator -->
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:layout_centerInParent="true"
-        android:gravity="center">
+        android:layout_marginBottom="10dp">
 
-        <!-- Title -->
-        <TextView
-            android:id="@+id/widget_title"
+        <!-- Logo + VETO Title -->
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="VETO FOCUS"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.1" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_alignParentStart="true">
 
-        <!-- Status / Subtitle -->
-        <TextView
-            android:id="@+id/widget_status"
+            <TextView
+                android:id="@+id/widget_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="VETO"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.15" />
+            
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=" FOCUS"
+                android:textColor="#80FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="normal"
+                android:letterSpacing="0.1" />
+        </LinearLayout>
+
+        <!-- Status Badge -->
+        <LinearLayout
+            android:id="@+id/widget_status_badge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Lockdown Inactive"
-            android:textColor="#B3FFFFFF"
-            android:textSize="12sp"
-            android:layout_marginTop="4dp" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_alignParentEnd="true"
+            android:background="@drawable/widget_status_badge_bg"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp">
 
-        <!-- Engage Action Button -->
-        <Button
-            android:id="@+id/widget_button"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="Engage Lockdown"
-            android:textColor="#05050A"
-            android:background="@drawable/widget_button_background"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:layout_marginTop="12dp"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp" />
+            <ImageView
+                android:id="@+id/widget_status_dot"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:src="@drawable/widget_status_inactive_dot"
+                android:layout_marginEnd="6dp"
+                android:contentDescription="Status indicator" />
 
+            <TextView
+                android:id="@+id/widget_status_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Inactive"
+                android:textColor="#99FFFFFF"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </RelativeLayout>
+
+    <!-- Divider Line -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#1AFFFFFF"
+        android:layout_marginBottom="10dp" />
+
+    <!-- Stats Grid Row (Two columns) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:baselineAligned="false"
+        android:layout_marginBottom="12dp">
+
+        <!-- Left Stat Card: Screen Time -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@drawable/widget_stat_card_bg"
+            android:layout_marginEnd="6dp"
+            android:padding="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⏱ SCREEN TIME"
+                android:textColor="#80FFFFFF"
+                android:textSize="8sp"
+                android:letterSpacing="0.05"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_stat_screen_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginTop="3dp" />
+        </LinearLayout>
+
+        <!-- Right Stat Card: Active Rules -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@drawable/widget_stat_card_bg"
+            android:layout_marginStart="6dp"
+            android:padding="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🛡 ACTIVE RULES"
+                android:textColor="#80FFFFFF"
+                android:textSize="8sp"
+                android:letterSpacing="0.05"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_stat_rules_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginTop="3dp" />
+        </LinearLayout>
     </LinearLayout>
-</RelativeLayout>
+
+    <!-- Bottom Action Button -->
+    <Button
+        android:id="@+id/widget_button"
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:text="Engage Lockdown"
+        android:textColor="#05050A"
+        android:background="@drawable/widget_button_background"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.05" />
+
+</LinearLayout>
