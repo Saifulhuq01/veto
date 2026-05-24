@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.provider.Settings
 import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
@@ -58,6 +60,21 @@ class MainActivity : FlutterActivity() {
         if (pendingEngageLockdown && methodChannel != null) {
             methodChannel?.invokeMethod("triggerLockdown", null)
             pendingEngageLockdown = false
+        }
+    }
+
+    private fun updateVetoWidget() {
+        try {
+            val intent = Intent(this, VetoWidgetProvider::class.java).apply {
+                action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+            }
+            val ids = AppWidgetManager.getInstance(application)
+                .getAppWidgetIds(ComponentName(application, VetoWidgetProvider::class.java))
+            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+            sendBroadcast(intent)
+            Log.d("MainActivity", "Widget update broadcast sent, ids count: ${ids.size}")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to update widget: ${e.message}", e)
         }
     }
 
@@ -139,6 +156,9 @@ class MainActivity : FlutterActivity() {
                             val intent = Intent(VetoAccessibilityService.ACTION_RELOAD_RULES)
                             intent.setPackage(packageName())
                             sendBroadcast(intent)
+
+                            // Update widget
+                            updateVetoWidget()
                             
                             result.success(null)
                         } catch (e: Exception) {
