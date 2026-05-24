@@ -63,7 +63,7 @@ class VetoAlarmReceiver : BroadcastReceiver() {
 
         // Open app on click
         val openIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
@@ -75,7 +75,7 @@ class VetoAlarmReceiver : BroadcastReceiver() {
         // Action button to Engage Lockdown
         val engageIntent = Intent(context, MainActivity::class.java).apply {
             action = "com.veto.veto.ENGAGE_LOCKDOWN"
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val engagePendingIntent = PendingIntent.getActivity(
             context,

@@ -36,7 +36,7 @@ class VetoWidgetProvider : AppWidgetProvider() {
 
         // 3. Set up click pending intent on the main container to launch MainActivity (opens App)
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val openAppPendingIntent = PendingIntent.getActivity(
             context,
@@ -79,7 +79,7 @@ class VetoWidgetProvider : AppWidgetProvider() {
             // Setup pending intent to trigger lockdown click by launching MainActivity
             val engageIntent = Intent(context, MainActivity::class.java).apply {
                 action = "com.veto.veto.ENGAGE_LOCKDOWN"
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
             val pendingIntent = PendingIntent.getActivity(
                 context,
