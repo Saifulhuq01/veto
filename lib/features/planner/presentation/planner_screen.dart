@@ -633,8 +633,11 @@ class _AddScheduleSheetState extends ConsumerState<_AddScheduleSheet> {
   @override
   void initState() {
     super.initState();
-    // Default to the currently selected date from the calendar strip
-    _selectedDate = ref.read(selectedDateProvider);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selected = ref.read(selectedDateProvider);
+    // If selected date is in the past, default to today
+    _selectedDate = selected.isBefore(today) ? today : selected;
   }
 
   @override
@@ -689,10 +692,15 @@ class _AddScheduleSheetState extends ConsumerState<_AddScheduleSheet> {
 
   Future<void> _selectDate() async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Clamp initialDate to prevent assertion errors if _selectedDate is in the past
+    final initial = _selectedDate.isBefore(today) ? today : _selectedDate;
+
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(now.year, now.month, 1),
+      initialDate: initial,
+      firstDate: today, // Cannot select past dates
       lastDate: DateTime(now.year, now.month + 2, 0), // Allow selection up to end of next month
       builder: (context, child) {
         return Theme(
