@@ -589,10 +589,11 @@ class _AddLimitSheetState extends ConsumerState<_AddLimitSheet> {
         padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset),
         child: Form(
           key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -813,6 +814,7 @@ class _AddLimitSheetState extends ConsumerState<_AddLimitSheet> {
               ],
             ],
           ),
+         ),
         ),
       ),
     );
@@ -853,10 +855,11 @@ class _BlockWebsitesSheetState extends ConsumerState<_BlockWebsitesSheet> {
           ),
         ),
         padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -995,6 +998,7 @@ class _BlockWebsitesSheetState extends ConsumerState<_BlockWebsitesSheet> {
             ),
           ],
         ),
+       ),
       ),
     );
   }
