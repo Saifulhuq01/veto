@@ -16,6 +16,7 @@ import io.flutter.plugin.common.MethodChannel
 import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.Locale
+import android.net.VpnService
 
 /**
  * MainActivity — FlutterActivity with MethodChannel host for Veto.
@@ -36,16 +37,52 @@ class MainActivity : FlutterActivity() {
     private lateinit var rulesEngine: VetoRulesEngine
     private var methodChannel: MethodChannel? = null
     private var pendingEngageLockdown = false
+    private var vpnResult: MethodChannel.Result? = null
+    private val VPN_REQUEST_CODE = 2026
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestNotificationPermission()
         handleIntent(intent)
+        startServicesIfEnabled()
+    }
+
+    private fun startServicesIfEnabled() {
+        try {
+            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val directivesEnabled = prefs.getBoolean("flutter.system_directives_enabled", true)
+            if (directivesEnabled) {
+                val intent = Intent(this, VetoForegroundService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(intent)
+                } else {
+                    startService(intent)
+                }
+            }
+            val vpnEnabled = prefs.getBoolean("flutter.block_websites_enabled", false)
+            if (vpnEnabled && VpnService.prepare(this) == null) {
+                val intent = Intent(this, VetoVpnService::class.java).apply {
+                    action = VetoVpnService.ACTION_START
+                }
+                startService(intent)
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to start services on boot: ${e.message}")
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == VPN_REQUEST_CODE) {
+            val granted = resultCode == RESULT_OK
+            vpnResult?.success(granted)
+            vpnResult = null
+        }
     }
 
     private fun handleIntent(intent: Intent?) {
@@ -274,13 +311,113 @@ class MainActivity : FlutterActivity() {
                         }
                     }
 
-                    "requestUsageStatsPermission" -> {
+                     "requestUsageStatsPermission" -> {
                         try {
                             val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             }
                             startActivity(intent)
                             result.success(null)
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+
+                    "checkOverlayPermission" -> {
+                        try {
+                            val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                Settings.canDrawOverlays(this)
+                            } else {
+                                true
+                            }
+                            result.success(granted)
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+
+                    "requestOverlayPermission" -> {
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    android.net.Uri.parse("package:${packageName}")
+                                ).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                startActivity(intent)
+                            }
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+                    "checkVpnPermission" -> {
+                        try {
+                            val isPrepared = VpnService.prepare(this) == null
+                            result.success(isPrepared)
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+
+                    "requestVpnPermission" -> {
+                        try {
+                            val intent = VpnService.prepare(this)
+                            if (intent != null) {
+                                vpnResult = result
+                                startActivityForResult(intent, VPN_REQUEST_CODE)
+                            } else {
+                                result.success(true)
+                            }
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+
+                    "startVpnService" -> {
+                        try {
+                            val intent = Intent(this, VetoVpnService::class.java).apply {
+                                action = VetoVpnService.ACTION_START
+                            }
+                            startService(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+
+                    "stopVpnService" -> {
+                        try {
+                            val intent = Intent(this, VetoVpnService::class.java).apply {
+                                action = VetoVpnService.ACTION_STOP
+                            }
+                            startService(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+
+                    "startForegroundService" -> {
+                        try {
+                            val intent = Intent(this, VetoForegroundService::class.java)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startForegroundService(intent)
+                            } else {
+                                startService(intent)
+                            }
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+
+                    "stopForegroundService" -> {
+                        try {
+                            val intent = Intent(this, VetoForegroundService::class.java)
+                            stopService(intent)
+                            result.success(true)
                         } catch (e: Exception) {
                             result.error("ERROR", e.message, null)
                         }

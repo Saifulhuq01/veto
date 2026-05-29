@@ -7,6 +7,9 @@ import '../../../core/widgets/glass_panel.dart';
 import '../../../core/widgets/glass_toggle.dart';
 import '../../../core/widgets/glass_button.dart';
 import '../providers/directives_provider.dart';
+import '../../dashboard/providers/subscription_provider.dart';
+import '../../../core/widgets/paywall_sheet.dart';
+
 
 /// System Directives screen — configure app limits and deep blocking rules.
 class DirectivesScreen extends ConsumerWidget {
@@ -19,7 +22,6 @@ class DirectivesScreen extends ConsumerWidget {
     final websitesEnabled = ref.watch(blockWebsitesEnabledProvider);
     final blockedSitesCount = ref.watch(blockedWebsitesProvider).length;
     final notificationsEnabled = ref.watch(blockNotificationsEnabledProvider);
-    final strictModeEnabled = ref.watch(strictModeEnabledProvider);
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -95,7 +97,15 @@ class DirectivesScreen extends ConsumerWidget {
                 IconButton(
                   icon: const Icon(Icons.add, color: Colors.white),
                   tooltip: 'Add App Limit',
-                  onPressed: () => _showAddLimitBottomSheet(context, ref),
+                  onPressed: () {
+                    final isPro = ref.read(subscriptionProvider);
+                    final count = directives.appLimits.length;
+                    if (!isPro && count >= 3) {
+                      PaywallSheet.show(context, customMessage: 'Adding more than 3 app limits is a Veto Pro feature.');
+                    } else {
+                      _showAddLimitBottomSheet(context, ref);
+                    }
+                  },
                 ),
               ],
             ),
@@ -230,7 +240,14 @@ class DirectivesScreen extends ConsumerWidget {
                     subtitle: websitesEnabled
                         ? '$blockedSitesCount domains blocked'
                         : 'Blocked domains: disabled',
-                    onTap: () => _showBlockWebsitesBottomSheet(context, ref),
+                    onTap: () {
+                      final isPro = ref.read(subscriptionProvider);
+                      if (!isPro) {
+                        PaywallSheet.show(context, customMessage: 'Website blocking is a Veto Pro feature.');
+                      } else {
+                        _showBlockWebsitesBottomSheet(context, ref);
+                      }
+                    },
                   ),
                   Divider(
                     height: 1,
@@ -248,26 +265,7 @@ class DirectivesScreen extends ConsumerWidget {
                       onChanged: (_) => _toggleNotificationsBlocking(context, ref),
                     ),
                   ),
-                  Divider(
-                    height: 1,
-                    color: Colors.white.withValues(alpha: 0.05),
-                    indent: 16,
-                    endIndent: 16,
-                  ),
-                  _ControlRow(
-                    icon: Icons.gpp_bad_outlined,
-                    label: 'Strict Mode (Anti-Cheat)',
-                    subtitle: 'Prevent force closing or uninstalling Veto',
-                    onTap: () {
-                      ref.read(strictModeEnabledProvider.notifier).toggle();
-                    },
-                    trailing: GlassToggle(
-                      value: strictModeEnabled,
-                      onChanged: (_) {
-                        ref.read(strictModeEnabledProvider.notifier).toggle();
-                      },
-                    ),
-                  ),
+
                 ],
               ),
             ),

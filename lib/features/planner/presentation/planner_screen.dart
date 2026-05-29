@@ -6,6 +6,9 @@ import '../../../core/theme/veto_colors.dart';
 import '../../../core/widgets/glass_button.dart';
 import '../../../core/widgets/glass_panel.dart';
 import '../providers/planner_provider.dart';
+import '../../dashboard/providers/subscription_provider.dart';
+import '../../../core/widgets/paywall_sheet.dart';
+
 
 /// Provider to track currently selected date
 final selectedDateProvider = StateProvider<DateTime>((ref) {
@@ -800,6 +803,11 @@ class _NewScheduleButton extends ConsumerWidget {
   }
 
   void _showAddScheduleBottomSheet(BuildContext context, WidgetRef ref) {
+    final isPro = ref.read(subscriptionProvider);
+    if (!isPro) {
+      PaywallSheet.show(context, customMessage: 'Scheduling focus sessions is a Veto Pro feature.');
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,

@@ -189,6 +189,23 @@ class BlockedAppsNotifier extends StateNotifier<BlockedAppsState> {
 
     state = state.copyWith(apps: updated);
   }
+
+  /// Bulk update blocking state for a list of package names (e.g. from focus profiles)
+  Future<void> applyProfileBlockedPackages(List<String> packages) async {
+    final updated = state.apps.map((app) {
+      final shouldBlock = packages.contains(app.packageName);
+      if (app.isBlocked != shouldBlock) {
+        _channel.setDeepBlockRule(
+          app.packageName,
+          ['*'],
+          shouldBlock,
+        );
+        return app.copyWith(isBlocked: shouldBlock);
+      }
+      return app;
+    }).toList();
+    state = state.copyWith(apps: updated);
+  }
 }
 
 final blockedAppsProvider =

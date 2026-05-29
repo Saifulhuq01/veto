@@ -1,11 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../bridge/veto_method_channel.dart';
+import 'blocked_apps_provider.dart';
 
 /// Usage stats state — fetched from native UsageStatsManager via MethodChannel.
 class UsageStatsState {
   const UsageStatsState({
     this.todayUsageMinutes = 0,
     this.focusMinutes = 0,
-    this.blockedAppsCount = 8,
+    this.blockedAppsCount = 0,
   });
 
   final int todayUsageMinutes;
@@ -42,16 +45,42 @@ class UsageStatsState {
 }
 
 class UsageStatsNotifier extends StateNotifier<UsageStatsState> {
-  UsageStatsNotifier() : super(const UsageStatsState(todayUsageMinutes: 179));
+  UsageStatsNotifier(this._ref) : super(const UsageStatsState()) {
+    _load();
+  }
+
+  final Ref _ref;
+  final _channel = VetoMethodChannel();
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final focusMins = prefs.getInt('veto_focus_minutes') ?? 0;
+    state = state.copyWith(focusMinutes: focusMins);
+    
+    // Fetch live usage stats
+    await refreshUsage();
+    
+    // Listen dynamically to blockedAppsProvider to compute blockedAppsCount
+    _ref.listen<BlockedAppsState>(blockedAppsProvider, (previous, next) {
+      final count = next.apps.where((a) => a.isBlocked).length;
+      state = state.copyWith(blockedAppsCount: count);
+    }, fireImmediately: true);
+  }
+
+  Future<void> refreshUsage() async {
+    final minutes = await _channel.getTodayUsageMinutes();
+    state = state.copyWith(todayUsageMinutes: minutes);
+  }
 
   void updateUsage(int minutes) {
     state = state.copyWith(todayUsageMinutes: minutes);
   }
 
-  void addFocusMinutes(int minutes) {
-    state = state.copyWith(
-      focusMinutes: state.focusMinutes + minutes,
-    );
+  Future<void> addFocusMinutes(int minutes) async {
+    final newMins = state.focusMinutes + minutes;
+    state = state.copyWith(focusMinutes: newMins);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('veto_focus_minutes', newMins);
   }
 
   void setBlockedAppsCount(int count) {
@@ -61,5 +90,6 @@ class UsageStatsNotifier extends StateNotifier<UsageStatsState> {
 
 final usageStatsProvider =
     StateNotifierProvider<UsageStatsNotifier, UsageStatsState>(
-  (ref) => UsageStatsNotifier(),
+  (ref) => UsageStatsNotifier(ref),
 );
+

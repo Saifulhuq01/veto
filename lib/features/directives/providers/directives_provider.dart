@@ -135,14 +135,7 @@ class DirectivesNotifier extends StateNotifier<DirectivesState> {
   final VetoMethodChannel _channel;
 
   static const _initialState = DirectivesState(
-    appLimits: [
-      AppLimitRule(
-        id: 'instagram_limit',
-        appName: 'Instagram',
-        packageName: 'com.instagram.android',
-        dailyLimitMinutes: 90,
-      ),
-    ],
+    appLimits: [],
     deepBlocks: [
       DeepBlockRule(
         id: 'youtube_shorts',
@@ -204,6 +197,19 @@ class DirectivesNotifier extends StateNotifier<DirectivesState> {
       appLimits: loadedLimits,
       deepBlocks: updatedDeepBlocks,
     );
+
+    // 3. Start services on initialization if enabled
+    final systemDirectivesEnabled = prefs.getBool('veto_system_directives_enabled') ?? true;
+    if (systemDirectivesEnabled) {
+      await _channel.startForegroundService();
+    }
+    final blockWebsitesEnabled = prefs.getBool('veto_block_websites_enabled') ?? false;
+    if (blockWebsitesEnabled) {
+      final hasVpnPerm = await _channel.checkVpnPermission();
+      if (hasVpnPerm) {
+        await _channel.startVpnService();
+      }
+    }
   }
 
   /// Toggle a deep block rule and sync to native service.
@@ -278,10 +284,8 @@ final blockWebsitesEnabledProvider = StateNotifierProvider<SharedPreferencesBool
   return SharedPreferencesBoolNotifier('block_websites_enabled', false);
 });
 
-/// StateProvider for Strict Mode Enable/Disable Switch
-final strictModeEnabledProvider = StateNotifierProvider<SharedPreferencesBoolNotifier, bool>((ref) {
-  return SharedPreferencesBoolNotifier('strict_mode_enabled', false);
-});
+/// Strict Mode provider removed — anti-uninstall pattern violates Google Play policy.
+
 
 /// StateProvider for Notification Blocking Enable/Disable Switch (DND Switch)
 final blockNotificationsEnabledProvider = StateNotifierProvider<SharedPreferencesBoolNotifier, bool>((ref) {
@@ -310,8 +314,34 @@ class SharedPreferencesBoolNotifier extends StateNotifier<bool> {
     // Sync to SharedPreferences for access from Kotlin
     await prefs.setBool('flutter.$prefKey', newValue);
     
-    // If it's the DND toggle, update native DND state too!
-    if (prefKey == 'block_notifications_enabled') {
+    // Handle services based on toggle type
+    if (prefKey == 'system_directives_enabled') {
+      if (newValue) {
+        await VetoMethodChannel().startForegroundService();
+      } else {
+        await VetoMethodChannel().stopForegroundService();
+      }
+    } else if (prefKey == 'block_websites_enabled') {
+      if (newValue) {
+        final hasPerm = await VetoMethodChannel().checkVpnPermission();
+        if (hasPerm) {
+          await VetoMethodChannel().startVpnService();
+        } else {
+          final granted = await VetoMethodChannel().requestVpnPermission();
+          if (granted) {
+            await VetoMethodChannel().startVpnService();
+          } else {
+            // Permission denied: revert state
+            state = false;
+            await prefs.setBool('veto_$prefKey', false);
+            await prefs.setBool('flutter.$prefKey', false);
+            return;
+          }
+        }
+      } else {
+        await VetoMethodChannel().stopVpnService();
+      }
+    } else if (prefKey == 'block_notifications_enabled') {
       await VetoMethodChannel().setNotificationDND(newValue);
     }
     

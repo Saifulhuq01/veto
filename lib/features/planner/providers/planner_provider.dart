@@ -90,42 +90,9 @@ class PlannerNotifier extends StateNotifier<PlannerState> {
     final jsonStr = prefs.getString(_prefsKey);
 
     if (jsonStr == null) {
-      // Seed default mockup schedules for today
-      final todayStr = _getTodayDateString();
-      final defaults = [
-        ScheduleBlock(
-          id: 'default_1',
-          dateString: todayStr,
-          startTime: '09:00 AM',
-          endTime: '11:30 AM',
-          title: 'Deep Work Protocol',
-          description:
-              'System architecture review and core logic implementation. No interruptions allowed.',
-          tag: 'High Focus',
-          tagType: 'focus',
-        ),
-        ScheduleBlock(
-          id: 'default_2',
-          dateString: todayStr,
-          startTime: '12:00 PM',
-          endTime: '01:00 PM',
-          title: 'Lunch & Walk',
-          description: 'Disconnect from screens. 20 minute outdoor walk.',
-          tag: 'Recovery',
-          tagType: 'recovery',
-        ),
-        ScheduleBlock(
-          id: 'default_3',
-          dateString: todayStr,
-          startTime: '02:00 PM',
-          endTime: '03:00 PM',
-          title: 'Team Sync',
-          description: 'Weekly alignment on design system updates.',
-        ),
-      ];
-
-      state = PlannerState(schedules: defaults, isLoading: false);
-      await _saveToPrefs(defaults);
+      // Start with a clean schedule on first open
+      state = const PlannerState(schedules: [], isLoading: false);
+      await _saveToPrefs([]);
     } else {
       try {
         final decodedList = jsonDecode(jsonStr) as List<dynamic>;
@@ -137,11 +104,6 @@ class PlannerNotifier extends StateNotifier<PlannerState> {
         state = const PlannerState(schedules: [], isLoading: false);
       }
     }
-  }
-
-  static String _getTodayDateString() {
-    final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
   /// Add a new schedule block

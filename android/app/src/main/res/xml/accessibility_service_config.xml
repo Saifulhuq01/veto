@@ -11,5 +11,6 @@
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="300"
     android:canRetrieveWindowContent="true"
+    android:packageNames="com.google.android.youtube,com.instagram.android,com.android.chrome,org.mozilla.firefox,com.sec.android.app.sbrowser,com.opera.browser,com.microsoft.emmx,com.android.browser"
     android:settingsActivity="com.veto.veto.MainActivity"
     android:description="@string/accessibility_service_description" />

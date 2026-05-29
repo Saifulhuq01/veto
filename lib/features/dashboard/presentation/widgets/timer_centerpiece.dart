@@ -15,6 +15,8 @@ class TimerCenterpiece extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final blockedState = ref.watch(blockedAppsProvider);
     final blockedCount = blockedState.apps.where((app) => app.isBlocked).length;
+    final timerState = ref.watch(timerProvider);
+    final isWindDown = timerState.isWindDown;
 
     return GlassPanel(
       isCircle: true,
@@ -28,13 +30,17 @@ class TimerCenterpiece extends ConsumerWidget {
           boxShadow: [
             // Inner glow — premium glass depth
             BoxShadow(
-              color: Colors.white.withValues(alpha: 0.05),
+              color: isWindDown
+                  ? const Color(0x33FFB300)
+                  : Colors.white.withValues(alpha: 0.05),
               blurRadius: 40,
               spreadRadius: 0,
               blurStyle: BlurStyle.inner,
             ),
             BoxShadow(
-              color: Colors.white.withValues(alpha: 0.2),
+              color: isWindDown
+                  ? const Color(0x66FFB300)
+                  : Colors.white.withValues(alpha: 0.2),
               blurRadius: 4,
               spreadRadius: 0,
               offset: const Offset(0, 2),
@@ -54,38 +60,35 @@ class TimerCenterpiece extends ConsumerWidget {
           children: [
             // ── Timer text (isolated rebuild + duration picker tap) ──
             RepaintBoundary(
-              child: Consumer(
-                builder: (context, ref, _) {
-                  final timerState = ref.watch(timerProvider);
-                  final isRunning = timerState.isRunning;
-
-                  return GestureDetector(
-                    onTap: isRunning
-                        ? null
-                        : () => _showDurationPicker(context, ref),
-                    behavior: HitTestBehavior.opaque,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Text(
-                        timerState.display,
-                        style: TextStyle(
-                          fontSize: 72,
-                          fontWeight: FontWeight.w700,
-                          color: isRunning ? Colors.white : VetoColors.secondary,
-                          letterSpacing: -2,
-                          height: 80 / 72,
-                          shadows: const [
-                            Shadow(
-                              color: Color(0x33FFFFFF),
-                              blurRadius: 20,
-                              offset: Offset(0, 4),
-                            ),
-                          ],
+              child: GestureDetector(
+                onTap: timerState.isRunning
+                    ? null
+                    : () => _showDurationPicker(context, ref),
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    timerState.display,
+                    style: TextStyle(
+                      fontSize: 72,
+                      fontWeight: FontWeight.w700,
+                      color: timerState.isRunning
+                          ? (isWindDown ? const Color(0xFFFFB300) : Colors.white)
+                          : VetoColors.secondary,
+                      letterSpacing: -2,
+                      height: 80 / 72,
+                      shadows: [
+                        Shadow(
+                          color: isWindDown
+                              ? const Color(0x66FFB300)
+                              : const Color(0x33FFFFFF),
+                          blurRadius: 20,
+                          offset: const Offset(0, 4),
                         ),
-                      ),
+                      ],
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 8),

@@ -16,14 +16,18 @@ class GlassButton extends StatelessWidget {
     this.icon,
     this.isExpanded = false,
     this.height = 56,
+    this.color,
+    this.padding,
   });
 
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final GlassButtonVariant variant;
   final IconData? icon;
   final bool isExpanded;
   final double height;
+  final Color? color;
+  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +42,7 @@ class GlassButton extends StatelessWidget {
           splashFactory: InkSparkle.splashFactory,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: padding ?? const EdgeInsets.symmetric(horizontal: 16),
             decoration: _buildDecoration(),
             child: Row(
               mainAxisSize: isExpanded ? MainAxisSize.max : MainAxisSize.min,
@@ -52,13 +56,18 @@ class GlassButton extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                 ],
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: _textColor,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.2,
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: _textColor,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -73,7 +82,7 @@ class GlassButton extends StatelessWidget {
     switch (variant) {
       case GlassButtonVariant.primary:
         return BoxDecoration(
-          color: VetoColors.primary,
+          color: color ?? VetoColors.primary,
           borderRadius: BorderRadius.circular(9999),
           boxShadow: const [
             BoxShadow(
@@ -85,9 +94,9 @@ class GlassButton extends StatelessWidget {
         );
       case GlassButtonVariant.secondary:
         return BoxDecoration(
-          color: VetoColors.glassWhite10,
+          color: color?.withValues(alpha: 0.15) ?? VetoColors.glassWhite10,
           borderRadius: BorderRadius.circular(9999),
-          border: Border.all(color: VetoColors.glassBorder, width: 1),
+          border: Border.all(color: color?.withValues(alpha: 0.5) ?? VetoColors.glassBorder, width: 1),
           boxShadow: const [
             BoxShadow(
               color: VetoColors.glassInnerGlow,
@@ -108,10 +117,10 @@ class GlassButton extends StatelessWidget {
   Color get _textColor {
     switch (variant) {
       case GlassButtonVariant.primary:
-        return VetoColors.onPrimary;
+        return color != null ? Colors.white : VetoColors.onPrimary;
       case GlassButtonVariant.secondary:
       case GlassButtonVariant.tertiary:
-        return Colors.white;
+        return color ?? Colors.white;
     }
   }
 }

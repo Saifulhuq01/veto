@@ -18,6 +18,7 @@ class GlassPanel extends StatelessWidget {
     this.width,
     this.height,
     this.isCircle = false,
+    this.borderColor,
   });
 
   final Widget child;
@@ -29,6 +30,7 @@ class GlassPanel extends StatelessWidget {
   final double? width;
   final double? height;
   final bool isCircle;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +64,7 @@ class GlassPanel extends StatelessWidget {
               borderRadius: radius,
               color: Colors.white.withValues(alpha: fillOpacity),
               border: Border.all(
-                color: VetoColors.glassBorder,
+                color: borderColor ?? VetoColors.glassBorder,
                 width: 1,
               ),
               boxShadow: const [

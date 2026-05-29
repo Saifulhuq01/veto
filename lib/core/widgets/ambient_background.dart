@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/veto_colors.dart';
+import '../../features/dashboard/providers/timer_provider.dart';
 
 /// Animated atmospheric background — indigo + fuchsia orbs floating over
 /// dark obsidian canvas with subtle mesh dot overlay.
+/// In wind-down mode, shifts to a warm orange-amber sunset glow.
 ///
 /// CRITICAL: This entire widget is wrapped in RepaintBoundary.
 /// The orb animations run via AnimationController — they do NOT cause
 /// child widgets (glass panels, timer) to repaint.
-class AmbientBackground extends StatefulWidget {
+class AmbientBackground extends ConsumerStatefulWidget {
   const AmbientBackground({super.key});
 
   @override
-  State<AmbientBackground> createState() => _AmbientBackgroundState();
+  ConsumerState<AmbientBackground> createState() => _AmbientBackgroundState();
 }
 
-class _AmbientBackgroundState extends State<AmbientBackground>
+class _AmbientBackgroundState extends ConsumerState<AmbientBackground>
     with TickerProviderStateMixin {
   late final AnimationController _controller1;
   late final AnimationController _controller2;
@@ -42,12 +45,23 @@ class _AmbientBackgroundState extends State<AmbientBackground>
 
   @override
   Widget build(BuildContext context) {
+    final timerState = ref.watch(timerProvider);
+    final isWindDown = timerState.isWindDown;
+
+    final colorIndigo = isWindDown
+        ? const Color(0xFFFFB300) // Amber
+        : VetoColors.orbIndigo;
+
+    final colorFuchsia = isWindDown
+        ? const Color(0xFFFF3D00) // Deep Orange
+        : VetoColors.orbFuchsia;
+
     return SizedBox.expand(
       child: ColoredBox(
         color: VetoColors.canvasBase,
         child: Stack(
           children: [
-            // ── Indigo orb using RadialGradient to avoid BackdropFilter ──
+            // ── Indigo/Amber orb ──
             AnimatedBuilder(
               animation: _controller1,
               builder: (context, child) {
@@ -58,21 +72,22 @@ class _AmbientBackgroundState extends State<AmbientBackground>
                   child: child!,
                 );
               },
-              child: Container(
+              child: AnimatedContainer(
+                duration: const Duration(seconds: 2),
                 width: 450,
                 height: 450,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      VetoColors.orbIndigo.withValues(alpha: 0.35),
-                      VetoColors.orbIndigo.withValues(alpha: 0.0),
+                      colorIndigo.withValues(alpha: 0.35),
+                      colorIndigo.withValues(alpha: 0.0),
                     ],
                   ),
                 ),
               ),
             ),
-            // ── Fuchsia orb using RadialGradient to avoid BackdropFilter ──
+            // ── Fuchsia/Orange orb ──
             AnimatedBuilder(
               animation: _controller2,
               builder: (context, child) {
@@ -83,15 +98,16 @@ class _AmbientBackgroundState extends State<AmbientBackground>
                   child: child!,
                 );
               },
-              child: Container(
+              child: AnimatedContainer(
+                duration: const Duration(seconds: 2),
                 width: 550,
                 height: 550,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      VetoColors.orbFuchsia.withValues(alpha: 0.25),
-                      VetoColors.orbFuchsia.withValues(alpha: 0.0),
+                      colorFuchsia.withValues(alpha: 0.25),
+                      colorFuchsia.withValues(alpha: 0.0),
                     ],
                   ),
                 ),
@@ -113,23 +129,7 @@ class _AmbientBackgroundState extends State<AmbientBackground>
   }
 }
 
-/// Animated builder that exposes the animation as a listenable.
-class AnimatedBuilder extends AnimatedWidget {
-  const AnimatedBuilder({
-    super.key,
-    required Animation<double> animation,
-    required this.builder,
-    this.child,
-  }) : super(listenable: animation);
 
-  final Widget Function(BuildContext context, Widget? child) builder;
-  final Widget? child;
-
-  @override
-  Widget build(BuildContext context) {
-    return builder(context, child);
-  }
-}
 
 class _MeshDotPainter extends CustomPainter {
   @override

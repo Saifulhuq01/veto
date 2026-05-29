@@ -190,6 +190,74 @@ class VetoMethodChannel {
     }
   }
 
+  /// Check if VPN permission is granted.
+  Future<bool> checkVpnPermission() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('checkVpnPermission');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Request VPN permission from the user.
+  Future<bool> requestVpnPermission() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('requestVpnPermission');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Start the native local VPN service.
+  Future<void> startVpnService() async {
+    try {
+      await _channel.invokeMethod('startVpnService');
+    } on PlatformException {
+      // no-op
+    } on MissingPluginException {
+      // no-op
+    }
+  }
+
+  /// Stop the native local VPN service.
+  Future<void> stopVpnService() async {
+    try {
+      await _channel.invokeMethod('stopVpnService');
+    } on PlatformException {
+      // no-op
+    } on MissingPluginException {
+      // no-op
+    }
+  }
+
+  /// Start the native app limits foreground service.
+  Future<void> startForegroundService() async {
+    try {
+      await _channel.invokeMethod('startForegroundService');
+    } on PlatformException {
+      // no-op
+    } on MissingPluginException {
+      // no-op
+    }
+  }
+
+  /// Stop the native app limits foreground service.
+  Future<void> stopForegroundService() async {
+    try {
+      await _channel.invokeMethod('stopForegroundService');
+    } on PlatformException {
+      // no-op
+    } on MissingPluginException {
+      // no-op
+    }
+  }
+
   /// Trigger the accessibility service to reload directives and settings in real time.
   Future<void> triggerDirectivesReload() async {
     try {
@@ -208,5 +276,28 @@ class VetoMethodChannel {
         onTrigger();
       }
     });
+  }
+
+  /// Check if App Overlay (SYSTEM_ALERT_WINDOW) permission is granted.
+  Future<bool> checkOverlayPermission() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('checkOverlayPermission');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Request App Overlay (SYSTEM_ALERT_WINDOW) permission.
+  Future<void> requestOverlayPermission() async {
+    try {
+      await _channel.invokeMethod('requestOverlayPermission');
+    } on PlatformException {
+      // no-op
+    } on MissingPluginException {
+      // no-op
+    }
   }
 }
