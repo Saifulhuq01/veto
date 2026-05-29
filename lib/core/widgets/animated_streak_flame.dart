@@ -1,12 +1,13 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:rive/rive.dart' hide RadialGradient;
 
 /// Animated custom-drawn Pomodoro streak flame widget.
-/// Draws different levels of flames based on the current streak count:
-/// - Level 0 (0 days): Sleeping/breathing warm ember.
-/// - Level 1 (1-3 days): Flickering yellow-orange flame.
-/// - Level 2 (4-7 days): High-heat cyan blazing flame.
-/// - Level 3 (8+ days): High-intensity cosmic purple-magenta supernova.
+/// Integrates a high-performance GPU Rive animation file with a CustomPaint fallback:
+/// - If 'assets/animations/streak_flame.riv' is available, loads the state machine 'FlameStateMachine'.
+/// - Binds the 'level' input: 0.0 (Ember), 1.0 (Ignited), 2.0 (Blazing), 3.0 (Supernova).
+/// - Otherwise, falls back to the native CustomPaint flickering canvas rendering.
 class AnimatedStreakFlame extends StatefulWidget {
   const AnimatedStreakFlame({
     super.key,
@@ -23,29 +24,57 @@ class AnimatedStreakFlame extends StatefulWidget {
 
 class _AnimatedStreakFlameState extends State<AnimatedStreakFlame>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+  late final AnimationController _fallbackController;
+  SMINumber? _levelInput;
+  bool _useRive = false;
+  bool _checkedAsset = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _fallbackController = AnimationController(
       vsync: this,
       duration: _getDuration(widget.streakCount),
     )..repeat();
+    _checkRiveAsset();
+  }
+
+  Future<void> _checkRiveAsset() async {
+    try {
+      // Check if the asset exists in the bundle
+      await rootBundle.load('assets/animations/streak_flame.riv');
+      if (mounted) {
+        setState(() {
+          _useRive = true;
+          _checkedAsset = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _useRive = false;
+          _checkedAsset = true;
+        });
+      }
+    }
   }
 
   @override
   void didUpdateWidget(covariant AnimatedStreakFlame oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_getLevel(oldWidget.streakCount) != _getLevel(widget.streakCount)) {
-      _controller.duration = _getDuration(widget.streakCount);
-      _controller.repeat();
+    if (_useRive) {
+      _updateRiveLevel();
+    } else {
+      if (_getLevel(oldWidget.streakCount) != _getLevel(widget.streakCount)) {
+        _fallbackController.duration = _getDuration(widget.streakCount);
+        _fallbackController.repeat();
+      }
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _fallbackController.dispose();
     super.dispose();
   }
 
@@ -71,14 +100,51 @@ class _AnimatedStreakFlameState extends State<AnimatedStreakFlame>
     }
   }
 
+  void _onRiveInit(Artboard artboard) {
+    final controller = StateMachineController.fromArtboard(artboard, 'FlameStateMachine');
+    if (controller != null) {
+      artboard.addController(controller);
+      _levelInput = controller.findInput<double>('level') as SMINumber?;
+      _updateRiveLevel();
+    }
+  }
+
+  void _updateRiveLevel() {
+    if (_levelInput != null) {
+      final level = _getLevel(widget.streakCount).toDouble();
+      _levelInput!.value = level;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!_checkedAsset) {
+      return SizedBox(width: widget.size, height: widget.size * 1.25);
+    }
+
+    if (_useRive) {
+      return SizedBox(
+        width: widget.size,
+        height: widget.size * 1.25,
+        child: RiveAnimation.asset(
+          'assets/animations/streak_flame.riv',
+          fit: BoxFit.contain,
+          stateMachines: const ['FlameStateMachine'],
+          onInit: _onRiveInit,
+        ),
+      );
+    }
+
+    return _buildFallbackFlame();
+  }
+
+  Widget _buildFallbackFlame() {
     return AnimatedBuilder(
-      animation: _controller,
+      animation: _fallbackController,
       builder: (context, child) {
         return CustomPaint(
           size: Size(widget.size, widget.size * 1.25),
-          painter: _FlamePainter(_controller.value, widget.streakCount),
+          painter: _FlamePainter(_fallbackController.value, widget.streakCount),
         );
       },
     );

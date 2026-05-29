@@ -17,6 +17,7 @@ import 'features/directives/providers/accessibility_provider.dart';
 import 'core/widgets/glass_panel.dart';
 import 'core/widgets/glass_button.dart';
 import 'core/widgets/animated_streak_flame.dart';
+import 'package:rive/rive.dart' hide RadialGradient;
 
 
 /// Veto app shell — MaterialApp with spatial glass theme,
@@ -215,10 +216,11 @@ class _FloatingTopNav extends ConsumerWidget {
             ),
           ),
           padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+          child: _CelebrationOverlay(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               Center(
                 child: Container(
                   width: 48,
@@ -305,6 +307,7 @@ class _FloatingTopNav extends ConsumerWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -750,6 +753,56 @@ class _BadgeRowState extends State<_BadgeRow> with SingleTickerProviderStateMixi
           ),
         );
       },
+    );
+  }
+}
+
+/// Dynamic GPU-bound Rive celebration animation wrapper.
+/// Plays full-screen celebration particles if 'assets/animations/celebration.riv' exists.
+class _CelebrationOverlay extends StatefulWidget {
+  const _CelebrationOverlay({required this.child});
+  final Widget child;
+
+  @override
+  State<_CelebrationOverlay> createState() => _CelebrationOverlayState();
+}
+
+class _CelebrationOverlayState extends State<_CelebrationOverlay> {
+  bool _useRive = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCelebrationAsset();
+  }
+
+  Future<void> _checkCelebrationAsset() async {
+    try {
+      await rootBundle.load('assets/animations/celebration.riv');
+      if (mounted) {
+        setState(() => _useRive = true);
+      }
+    } catch (_) {
+      // Ignored: keep fallback
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_useRive) return widget.child;
+
+    return Stack(
+      children: [
+        const Positioned.fill(
+          child: IgnorePointer(
+            child: RiveAnimation.asset(
+              'assets/animations/celebration.riv',
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+        widget.child,
+      ],
     );
   }
 }

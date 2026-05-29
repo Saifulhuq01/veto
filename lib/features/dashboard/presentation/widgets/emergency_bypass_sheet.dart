@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../../../core/theme/veto_colors.dart';
 import '../../../../core/widgets/glass_button.dart';
 import '../../providers/timer_provider.dart';
@@ -207,7 +208,7 @@ class _EmergencyBypassSheetState extends ConsumerState<EmergencyBypassSheet> {
                     ),
                   ),
                 ),
-              ),
+              ).animate(target: _remainingSeconds == 0 ? 1 : 0).shimmer(duration: 800.ms, color: Colors.white30).scale(begin: const Offset(1, 1), end: const Offset(1.1, 1.1), curve: Curves.elasticOut, duration: 500.ms),
             ),
             const SizedBox(height: 32),
 
@@ -228,13 +229,17 @@ class _EmergencyBypassSheetState extends ConsumerState<EmergencyBypassSheet> {
                     color: VetoColors.error,
                     onPressed: _remainingSeconds > 0 ? null : () => _executeBypass(),
                     isExpanded: true,
-                  ),
+                  )
+                  .animate(target: _remainingSeconds == 0 ? 1 : 0)
+                  .shake(hz: 5, duration: 400.ms)
+                  .then(delay: 5.seconds)
+                  .shake(hz: 5, duration: 400.ms),
                 ),
               ],
             ),
           ],
         ],
       ),
-    );
+    ).animate().slideY(begin: 0.25, end: 0, duration: 350.ms, curve: Curves.easeOutCubic).fadeIn(duration: 250.ms);
   }
 }

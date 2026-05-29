@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/veto_colors.dart';
 import 'glass_panel.dart';
 import 'glass_button.dart';
@@ -55,7 +56,7 @@ class PaywallSheet extends ConsumerWidget {
               color: VetoColors.secondary,
               size: 48,
             ),
-          ),
+          ).animate().scale(delay: 200.ms, duration: 400.ms, curve: Curves.elasticOut),
           const SizedBox(height: 16),
 
           // Header
@@ -114,7 +115,7 @@ class PaywallSheet extends ConsumerWidget {
                 ),
               ],
             ),
-          ),
+          ).animate().slideX(begin: 0.1, end: 0, duration: 400.ms, curve: Curves.easeOutCubic).fadeIn(duration: 300.ms),
           const SizedBox(height: 32),
 
           // Pricing
@@ -157,7 +158,8 @@ class PaywallSheet extends ConsumerWidget {
               }
             },
             isExpanded: true,
-          ),
+          ).animate(onPlay: (controller) => controller.repeat(reverse: true))
+           .scale(begin: const Offset(1, 1), end: const Offset(1.02, 1.02), duration: 1000.ms, curve: Curves.easeInOut),
           const SizedBox(height: 12),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -171,7 +173,7 @@ class PaywallSheet extends ConsumerWidget {
           ),
         ],
       ),
-    );
+    ).animate().slideY(begin: 0.25, end: 0, duration: 350.ms, curve: Curves.easeOutCubic).fadeIn(duration: 250.ms);
   }
 }
 
