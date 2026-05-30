@@ -13,15 +13,42 @@ import 'widgets/stats_pills.dart';
 import 'widgets/timer_centerpiece.dart';
 import 'widgets/emergency_bypass_sheet.dart';
 import 'widgets/weekly_report_card.dart';
+import 'widgets/session_complete_sheet.dart';
+import 'widgets/create_profile_sheet.dart';
 
 /// Focus Dashboard — the main screen of Veto.
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  bool _sheetShowing = false;
+
+  @override
+  Widget build(BuildContext context) {
     final accessibility = ref.watch(accessibilityProvider);
     final timerState = ref.watch(timerProvider);
+
+    // Listen for session completion and show celebration sheet
+    ref.listen<TimerState>(timerProvider, (prev, next) {
+      if (next.sessionJustCompleted && !_sheetShowing) {
+        _sheetShowing = true;
+        ref.read(timerProvider.notifier).clearSessionComplete();
+        SessionCompleteSheet.show(
+          context,
+          completedMinutes: next.completedSessionMinutes,
+        ).then((startAnother) {
+          _sheetShowing = false;
+          if (startAnother == true) {
+            ref.read(timerProvider.notifier).reset();
+            ref.read(timerProvider.notifier).start();
+          }
+        });
+      }
+    });
 
     if (timerState.isRunning) {
       return SafeArea(
@@ -237,9 +264,48 @@ class _ProfilesSelector extends ConsumerWidget {
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             scrollDirection: Axis.horizontal,
-            itemCount: state.profiles.length,
+            itemCount: state.profiles.length + 1,
             separatorBuilder: (context, index) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
+              // Add button at the end
+              if (index == state.profiles.length) {
+                return GestureDetector(
+                  onTap: () => CreateProfileSheet.show(context),
+                  child: GlassPanel(
+                    borderRadius: 14,
+                    blurSigma: 24,
+                    fillOpacity: 0.04,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_circle_outline, color: VetoColors.secondary, size: 20),
+                        SizedBox(width: 10),
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'New Profile',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: VetoColors.secondary,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Custom',
+                              style: TextStyle(fontSize: 10, color: Colors.white38),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
               final profile = state.profiles[index];
               final isSelected = profile.id == state.selectedProfileId;
               final isLocked = !isPro && profile.id != 'deep_work';

@@ -5,6 +5,8 @@ import '../../../bridge/veto_method_channel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'streak_provider.dart';
 import 'usage_stats_provider.dart';
+import '../../analytics/providers/analytics_provider.dart';
+import '../../rewards/providers/coins_provider.dart';
 
 /// Immutable timer state — strictly no mutable fields.
 class TimerState {
@@ -13,12 +15,16 @@ class TimerState {
     required this.totalSeconds,
     this.isRunning = false,
     this.isPaused = false,
+    this.sessionJustCompleted = false,
+    this.completedSessionMinutes = 0,
   });
 
   final int remainingSeconds;
   final int totalSeconds;
   final bool isRunning;
   final bool isPaused;
+  final bool sessionJustCompleted;
+  final int completedSessionMinutes;
 
   /// Factory for default Pomodoro timer.
   factory TimerState.initial() => const TimerState(
@@ -31,12 +37,16 @@ class TimerState {
     int? totalSeconds,
     bool? isRunning,
     bool? isPaused,
+    bool? sessionJustCompleted,
+    int? completedSessionMinutes,
   }) {
     return TimerState(
       remainingSeconds: remainingSeconds ?? this.remainingSeconds,
       totalSeconds: totalSeconds ?? this.totalSeconds,
       isRunning: isRunning ?? this.isRunning,
       isPaused: isPaused ?? this.isPaused,
+      sessionJustCompleted: sessionJustCompleted ?? this.sessionJustCompleted,
+      completedSessionMinutes: completedSessionMinutes ?? this.completedSessionMinutes,
     );
   }
 
@@ -153,6 +163,8 @@ class TimerNotifier extends StateNotifier<TimerState> {
           isRunning: false,
           isPaused: false,
           remainingSeconds: 0,
+          sessionJustCompleted: true,
+          completedSessionMinutes: completedMinutes,
         );
         _channel.setLockdownActive(false);
         _clearLockdownEndTime();
@@ -160,6 +172,10 @@ class TimerNotifier extends StateNotifier<TimerState> {
         // Record completed focus session and increment streak
         _ref.read(streakProvider.notifier).recordFocusSession(completedMinutes);
         _ref.read(usageStatsProvider.notifier).addFocusMinutes(completedMinutes);
+        _ref.read(analyticsProvider.notifier).recordSession(completedMinutes);
+        // Award focus coins with streak multiplier
+        final streakCount = _ref.read(streakProvider).streakCount;
+        _ref.read(coinsProvider.notifier).awardCoins(completedMinutes, streakCount);
         return;
       }
       state = state.copyWith(
@@ -198,6 +214,13 @@ class TimerNotifier extends StateNotifier<TimerState> {
     );
     _channel.setLockdownActive(false);
     _clearLockdownEndTime();
+  }
+
+  void clearSessionComplete() {
+    state = state.copyWith(
+      sessionJustCompleted: false,
+      completedSessionMinutes: 0,
+    );
   }
 
   @override

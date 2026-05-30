@@ -14,9 +14,17 @@ import 'features/planner/presentation/planner_screen.dart';
 import 'features/dashboard/providers/streak_provider.dart';
 import 'features/dashboard/providers/subscription_provider.dart';
 import 'features/directives/providers/accessibility_provider.dart';
+import 'features/onboarding/presentation/onboarding_screen.dart';
+import 'features/onboarding/providers/onboarding_provider.dart';
 import 'core/widgets/glass_panel.dart';
 import 'core/widgets/glass_button.dart';
 import 'core/widgets/animated_streak_flame.dart';
+import 'features/analytics/presentation/analytics_screen.dart';
+import 'features/rewards/presentation/rewards_sheet.dart';
+import 'features/bedtime/presentation/bedtime_settings.dart';
+import 'features/sounds/presentation/ambient_sound_panel.dart';
+import 'features/settings/providers/backup_provider.dart';
+import 'features/directives/presentation/widgets/block_screen_customizer.dart';
 import 'package:rive/rive.dart' hide RadialGradient;
 
 
@@ -31,7 +39,37 @@ class VetoApp extends StatelessWidget {
       title: 'Veto',
       debugShowCheckedModeBanner: false,
       theme: SpatialGlassTheme.darkTheme,
-      home: const VetoShell(),
+      home: const _VetoEntryPoint(),
+    );
+  }
+}
+
+/// Entry point that routes to Onboarding or VetoShell based on first-launch status.
+class _VetoEntryPoint extends ConsumerWidget {
+  const _VetoEntryPoint();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final onboarding = ref.watch(onboardingProvider);
+
+    if (onboarding.isLoading) {
+      return const Scaffold(
+        backgroundColor: VetoColors.canvasBase,
+        body: Center(
+          child: CircularProgressIndicator(color: VetoColors.secondary),
+        ),
+      );
+    }
+
+    if (onboarding.isCompleted) {
+      return const VetoShell();
+    }
+
+    return OnboardingScreen(
+      onComplete: () {
+        // Force rebuild to show VetoShell
+        ref.invalidate(onboardingProvider);
+      },
     );
   }
 }
@@ -52,6 +90,7 @@ class _VetoShellState extends ConsumerState<VetoShell> {
     DashboardScreen(),
     PlannerScreen(),
     DirectivesScreen(),
+    AnalyticsScreen(),
   ];
 
   @override
@@ -459,6 +498,128 @@ class _FloatingTopNav extends ConsumerWidget {
                       trailing: Icon(Icons.chevron_right, color: Colors.white.withValues(alpha: 0.3)),
                       onTap: () async {
                         await VetoMethodChannel().requestOverlayPermission();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              const Text(
+                'FEATURES',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: VetoColors.onSurfaceVariant, letterSpacing: 1.5),
+              ),
+              const SizedBox(height: 12),
+
+              GlassPanel(
+                borderRadius: 16,
+                blurSigma: 16,
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  children: [
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 20),
+                      title: const Text('Focus Coins & Rewards', style: TextStyle(color: Colors.white)),
+                      subtitle: Text('Earn coins for focus sessions', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11)),
+                      trailing: Icon(Icons.chevron_right, color: Colors.white.withValues(alpha: 0.3)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        RewardsSheet.show(context);
+                      },
+                    ),
+                    Divider(color: Colors.white.withValues(alpha: 0.05), height: 1, indent: 48),
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.bedtime, color: VetoColors.orbIndigo, size: 20),
+                      title: const Text('Bedtime Mode', style: TextStyle(color: Colors.white)),
+                      subtitle: Text('Auto-block at night', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11)),
+                      trailing: Icon(Icons.chevron_right, color: Colors.white.withValues(alpha: 0.3)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        BedtimeSettingsPanel.show(context);
+                      },
+                    ),
+                    Divider(color: Colors.white.withValues(alpha: 0.05), height: 1, indent: 48),
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.music_note, color: VetoColors.orbFuchsia, size: 20),
+                      title: const Text('Ambient Sounds', style: TextStyle(color: Colors.white)),
+                      subtitle: Text('Background sounds for focus', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11)),
+                      trailing: Icon(Icons.chevron_right, color: Colors.white.withValues(alpha: 0.3)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        AmbientSoundPanel.show(context);
+                      },
+                    ),
+                    Divider(color: Colors.white.withValues(alpha: 0.05), height: 1, indent: 48),
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.palette, color: VetoColors.secondary, size: 20),
+                      title: const Text('Block Screen Style', style: TextStyle(color: Colors.white)),
+                      subtitle: Text('Customize what blocked apps show', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11)),
+                      trailing: Icon(Icons.chevron_right, color: Colors.white.withValues(alpha: 0.3)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        BlockScreenCustomizer.show(context);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              const Text(
+                'DATA & PRIVACY',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: VetoColors.onSurfaceVariant, letterSpacing: 1.5),
+              ),
+              const SizedBox(height: 12),
+
+              GlassPanel(
+                borderRadius: 16,
+                blurSigma: 16,
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  children: [
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.download, color: VetoColors.secondary, size: 20),
+                      title: const Text('Export Backup', style: TextStyle(color: Colors.white)),
+                      subtitle: Text('Save all settings as JSON', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11)),
+                      trailing: Icon(Icons.chevron_right, color: Colors.white.withValues(alpha: 0.3)),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        final success = await ref.read(backupProvider.notifier).exportData();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(success ? 'Backup exported!' : 'Export failed'),
+                              backgroundColor: success ? VetoColors.emeraldActive : VetoColors.error,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    Divider(color: Colors.white.withValues(alpha: 0.05), height: 1, indent: 48),
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.upload, color: Colors.amber, size: 20),
+                      title: const Text('Import Backup', style: TextStyle(color: Colors.white)),
+                      subtitle: Text('Restore from JSON file', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11)),
+                      trailing: Icon(Icons.chevron_right, color: Colors.white.withValues(alpha: 0.3)),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        final success = await ref.read(backupProvider.notifier).importData();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(success ? 'Backup restored! Restart app.' : 'Import failed'),
+                              backgroundColor: success ? VetoColors.emeraldActive : VetoColors.error,
+                            ),
+                          );
+                        }
                       },
                     ),
                   ],

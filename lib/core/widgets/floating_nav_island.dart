@@ -18,12 +18,14 @@ class FloatingNavIsland extends StatelessWidget {
     Icons.timer_outlined,
     Icons.calendar_today_outlined,
     Icons.shield_outlined,
+    Icons.bar_chart_outlined,
   ];
 
   static const _iconsFilled = [
     Icons.timer,
     Icons.calendar_today,
     Icons.shield,
+    Icons.bar_chart,
   ];
 
   @override
@@ -64,7 +66,7 @@ class FloatingNavIsland extends StatelessWidget {
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: List.generate(3, (index) {
+                children: List.generate(4, (index) {
                   final isActive = index == currentIndex;
                   return Padding(
                     padding: EdgeInsets.only(

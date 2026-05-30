@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/app_constants.dart';
 
 /// Dart↔Kotlin MethodChannel bridge for Veto.
@@ -298,6 +299,110 @@ class VetoMethodChannel {
       // no-op
     } on MissingPluginException {
       // no-op
+    }
+  }
+
+  /// Schedule a notification at a specific time (daily repeating or one-shot).
+  Future<void> scheduleNotification({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    bool repeating = false,
+  }) async {
+    try {
+      await _channel.invokeMethod('scheduleNotification', {
+        'id': id,
+        'title': title,
+        'body': body,
+        'hour': hour,
+        'minute': minute,
+        'repeating': repeating,
+      });
+    } on PlatformException {
+      // no-op
+    } on MissingPluginException {
+      // no-op
+    }
+  }
+
+  /// Cancel a scheduled notification by ID.
+  Future<void> cancelNotification(int id) async {
+    try {
+      await _channel.invokeMethod('cancelNotification', {'id': id});
+    } on PlatformException {
+      // no-op
+    } on MissingPluginException {
+      // no-op
+    }
+  }
+
+  /// Trigger auto-lockdown from a scheduled alarm.
+  Future<void> triggerAutoLockdown(int durationMinutes) async {
+    try {
+      await _channel.invokeMethod('triggerAutoLockdown', {
+        'durationMinutes': durationMinutes,
+      });
+    } on PlatformException {
+      // no-op
+    } on MissingPluginException {
+      // no-op
+    }
+  }
+
+  /// Get the category string for a given package name.
+  Future<String> getAppCategory(String packageName) async {
+    try {
+      final result = await _channel.invokeMethod<String>('getAppCategory', {
+        'packageName': packageName,
+      });
+      return result ?? 'other';
+    } on PlatformException {
+      return 'other';
+    } on MissingPluginException {
+      return 'other';
+    }
+  }
+
+  /// Export all app data as a JSON string.
+  Future<String> exportAllData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      final Map<String, dynamic> data = {};
+      for (final key in keys) {
+        data[key] = prefs.get(key);
+      }
+      return jsonEncode(data);
+    } catch (e) {
+      return '{}';
+    }
+  }
+
+  /// Import app data from a JSON string.
+  Future<bool> importAllData(String jsonStr) async {
+    try {
+      final Map<String, dynamic> data =
+          jsonDecode(jsonStr) as Map<String, dynamic>;
+      final prefs = await SharedPreferences.getInstance();
+      for (final entry in data.entries) {
+        if (entry.value is String) {
+          await prefs.setString(entry.key, entry.value as String);
+        } else if (entry.value is int) {
+          await prefs.setInt(entry.key, entry.value as int);
+        } else if (entry.value is double) {
+          await prefs.setDouble(entry.key, entry.value as double);
+        } else if (entry.value is bool) {
+          await prefs.setBool(entry.key, entry.value as bool);
+        } else if (entry.value is List) {
+          await prefs.setStringList(
+              entry.key, (entry.value as List).cast<String>());
+        }
+      }
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 }

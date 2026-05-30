@@ -14,6 +14,8 @@ class ScheduleBlock {
     required this.description,
     this.tag,
     this.tagType, // 'focus', 'recovery', or null
+    this.autoEngage = false,
+    this.durationMinutes = 25,
   });
 
   final String id;
@@ -24,6 +26,8 @@ class ScheduleBlock {
   final String description;
   final String? tag;
   final String? tagType;
+  final bool autoEngage;
+  final int durationMinutes;
 
   Map<String, dynamic> toJson() {
     return {
@@ -35,6 +39,8 @@ class ScheduleBlock {
       'description': description,
       'tag': tag,
       'tagType': tagType,
+      'autoEngage': autoEngage,
+      'durationMinutes': durationMinutes,
     };
   }
 
@@ -48,6 +54,8 @@ class ScheduleBlock {
       description: json['description'] as String,
       tag: json['tag'] as String?,
       tagType: json['tagType'] as String?,
+      autoEngage: json['autoEngage'] as bool? ?? false,
+      durationMinutes: json['durationMinutes'] as int? ?? 25,
     );
   }
 
