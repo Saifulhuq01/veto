@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:just_audio/just_audio.dart';
 
 /// Individual ambient sound with volume control.
 class AmbientSound {
@@ -7,6 +8,7 @@ class AmbientSound {
     required this.id,
     required this.name,
     required this.iconCodePoint,
+    required this.assetPath,
     this.volume = 0.5,
     this.isPlaying = false,
   });
@@ -14,6 +16,7 @@ class AmbientSound {
   final String id;
   final String name;
   final int iconCodePoint;
+  final String assetPath;
   final double volume;
   final bool isPlaying;
 
@@ -22,6 +25,7 @@ class AmbientSound {
       id: id,
       name: name,
       iconCodePoint: iconCodePoint,
+      assetPath: assetPath,
       volume: volume ?? this.volume,
       isPlaying: isPlaying ?? this.isPlaying,
     );
@@ -68,18 +72,22 @@ class AmbientSoundState {
 class AmbientSoundNotifier extends StateNotifier<AmbientSoundState> {
   AmbientSoundNotifier() : super(_initialState) {
     _loadPrefs();
+    _initPlayers();
   }
 
   static const _prefsAutoPlayKey = 'veto_ambient_autoplay';
 
+  /// Audio players per sound ID.
+  final Map<String, AudioPlayer> _players = {};
+
   static const _initialState = AmbientSoundState(
     sounds: [
-      AmbientSound(id: 'rain', name: 'Rain', iconCodePoint: 0xe645), // water_drop
-      AmbientSound(id: 'forest', name: 'Forest', iconCodePoint: 0xea3a), // forest
-      AmbientSound(id: 'lofi', name: 'Lo-Fi', iconCodePoint: 0xe3a2), // headphones
-      AmbientSound(id: 'whitenoise', name: 'White Noise', iconCodePoint: 0xe40a), // graphic_eq
-      AmbientSound(id: 'cafe', name: 'Café', iconCodePoint: 0xe541), // coffee
-      AmbientSound(id: 'ocean', name: 'Ocean', iconCodePoint: 0xf88a), // waves
+      AmbientSound(id: 'rain', name: 'Rain', iconCodePoint: 0xe645, assetPath: 'assets/sounds/rain.mp3'),
+      AmbientSound(id: 'forest', name: 'Forest', iconCodePoint: 0xea3a, assetPath: 'assets/sounds/forest.mp3'),
+      AmbientSound(id: 'lofi', name: 'Lo-Fi', iconCodePoint: 0xe3a2, assetPath: 'assets/sounds/lofi.mp3'),
+      AmbientSound(id: 'whitenoise', name: 'White Noise', iconCodePoint: 0xe40a, assetPath: 'assets/sounds/whitenoise.mp3'),
+      AmbientSound(id: 'cafe', name: 'Café', iconCodePoint: 0xe541, assetPath: 'assets/sounds/cafe.mp3'),
+      AmbientSound(id: 'ocean', name: 'Ocean', iconCodePoint: 0xf88a, assetPath: 'assets/sounds/ocean.mp3'),
     ],
   );
 
@@ -96,11 +104,29 @@ class AmbientSoundNotifier extends StateNotifier<AmbientSoundState> {
     state = state.copyWith(autoPlayOnLockdown: autoPlay);
   }
 
-  void toggleSound(String id) {
-    final updatedSounds = state.sounds.map((s) {
-      if (s.id == id) {
-        return s.copyWith(isPlaying: !s.isPlaying);
+  /// Initialize audio players for each sound.
+  Future<void> _initPlayers() async {
+    for (final sound in state.sounds) {
+      try {
+        final player = AudioPlayer();
+        await player.setLoopMode(LoopMode.one);
+        await player.setVolume(sound.volume);
+        // Try to load asset — will fail gracefully if asset doesn't exist yet
+        try {
+          await player.setAsset(sound.assetPath);
+        } catch (_) {
+          // Asset not bundled yet — player ready for when assets are added
+        }
+        _players[sound.id] = player;
+      } catch (_) {
+        // Graceful degradation — UI still works, just no audio
       }
+    }
+  }
+
+  Future<void> toggleSound(String id) async {
+    final updatedSounds = state.sounds.map((s) {
+      if (s.id == id) return s.copyWith(isPlaying: !s.isPlaying);
       return s;
     }).toList();
 
@@ -108,45 +134,82 @@ class AmbientSoundNotifier extends StateNotifier<AmbientSoundState> {
       sounds: updatedSounds,
       isGloballyPlaying: updatedSounds.any((s) => s.isPlaying),
     );
+
+    final sound = updatedSounds.firstWhere((s) => s.id == id);
+    final player = _players[id];
+    if (player != null) {
+      if (sound.isPlaying) {
+        try {
+          await player.seek(Duration.zero);
+          await player.play();
+        } catch (_) {}
+      } else {
+        await player.pause();
+      }
+    }
   }
 
-  void setVolume(String id, double volume) {
+  Future<void> setVolume(String id, double volume) async {
+    final clamped = volume.clamp(0.0, 1.0);
     final updatedSounds = state.sounds.map((s) {
-      if (s.id == id) {
-        return s.copyWith(volume: volume.clamp(0.0, 1.0));
-      }
+      if (s.id == id) return s.copyWith(volume: clamped);
       return s;
     }).toList();
 
     state = state.copyWith(sounds: updatedSounds);
+    final player = _players[id];
+    if (player != null) {
+      await player.setVolume(clamped);
+    }
   }
 
-  void applyPreset(SoundPreset preset) {
+  Future<void> applyPreset(SoundPreset preset) async {
     final updatedSounds = state.sounds.map((s) {
       final shouldPlay = preset.activeSoundIds.contains(s.id);
       return s.copyWith(isPlaying: shouldPlay);
     }).toList();
 
-    state = state.copyWith(
-      sounds: updatedSounds,
-      isGloballyPlaying: true,
-    );
+    state = state.copyWith(sounds: updatedSounds, isGloballyPlaying: true);
+
+    for (final sound in updatedSounds) {
+      final player = _players[sound.id];
+      if (player == null) continue;
+      if (sound.isPlaying) {
+        try {
+          await player.seek(Duration.zero);
+          await player.play();
+        } catch (_) {}
+      } else {
+        await player.pause();
+      }
+    }
   }
 
-  void stopAll() {
+  Future<void> stopAll() async {
     final updatedSounds = state.sounds
         .map((s) => s.copyWith(isPlaying: false))
         .toList();
     state = state.copyWith(sounds: updatedSounds, isGloballyPlaying: false);
+
+    for (final player in _players.values) {
+      await player.pause();
+    }
   }
 
-  void startAutoPlay() {
+  Future<void> startAutoPlay() async {
     if (!state.autoPlayOnLockdown) return;
     if (state.activeSoundCount == 0) {
-      // Default: start rain + lofi
-      applyPreset(presets.first);
+      await applyPreset(presets.first);
     } else {
       state = state.copyWith(isGloballyPlaying: true);
+      for (final sound in state.sounds) {
+        if (sound.isPlaying) {
+          final player = _players[sound.id];
+          if (player != null) {
+            try { await player.play(); } catch (_) {}
+          }
+        }
+      }
     }
   }
 
@@ -154,6 +217,14 @@ class AmbientSoundNotifier extends StateNotifier<AmbientSoundState> {
     state = state.copyWith(autoPlayOnLockdown: enabled);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefsAutoPlayKey, enabled);
+  }
+
+  @override
+  void dispose() {
+    for (final player in _players.values) {
+      player.dispose();
+    }
+    super.dispose();
   }
 }
 

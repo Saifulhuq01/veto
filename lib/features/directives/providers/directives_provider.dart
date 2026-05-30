@@ -267,6 +267,42 @@ class DirectivesNotifier extends StateNotifier<DirectivesState> {
     final jsonStr = jsonEncode(list.map((item) => item.toJson()).toList());
     await prefs.setString('veto_app_limits', jsonStr);
   }
+
+  /// Add a custom deep block rule.
+  Future<void> addDeepBlockRule(DeepBlockRule rule) async {
+    final updated = [...state.deepBlocks, rule];
+    state = state.copyWith(deepBlocks: updated);
+    await _saveDeepBlocksToPrefs(updated);
+
+    // Sync to native
+    if (rule.isActive) {
+      await _channel.setDeepBlockRule(rule.packageName, rule.nodeTexts, true);
+    }
+  }
+
+  /// Delete a deep block rule by ID.
+  Future<void> deleteDeepBlockRule(String id) async {
+    final rule = state.deepBlocks.firstWhere((r) => r.id == id);
+    // Disable on native side
+    await _channel.setDeepBlockRule(rule.packageName, rule.nodeTexts, false);
+
+    final updated = state.deepBlocks.where((r) => r.id != id).toList();
+    state = state.copyWith(deepBlocks: updated);
+    await _saveDeepBlocksToPrefs(updated);
+  }
+
+  Future<void> _saveDeepBlocksToPrefs(List<DeepBlockRule> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = list.map((r) => {
+      'id': r.id,
+      'featureName': r.featureName,
+      'packageName': r.packageName,
+      'nodeTexts': r.nodeTexts,
+      'iconData': r.iconData,
+      'isActive': r.isActive,
+    }).toList();
+    await prefs.setString('veto_deep_blocks', jsonEncode(jsonList));
+  }
 }
 
 final directivesProvider =

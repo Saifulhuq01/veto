@@ -7,6 +7,7 @@ import 'streak_provider.dart';
 import 'usage_stats_provider.dart';
 import '../../analytics/providers/analytics_provider.dart';
 import '../../rewards/providers/coins_provider.dart';
+import '../../sounds/providers/ambient_sound_provider.dart';
 
 /// Immutable timer state — strictly no mutable fields.
 class TimerState {
@@ -152,6 +153,9 @@ class TimerNotifier extends StateNotifier<TimerState> {
     _channel.setLockdownActive(true);
     _saveLockdownEndTime();
 
+    // Auto-start ambient sounds when lockdown begins
+    _ref.read(ambientSoundProvider.notifier).startAutoPlay();
+
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (state.remainingSeconds <= 0) {
@@ -176,6 +180,9 @@ class TimerNotifier extends StateNotifier<TimerState> {
         // Award focus coins with streak multiplier
         final streakCount = _ref.read(streakProvider).streakCount;
         _ref.read(coinsProvider.notifier).awardCoins(completedMinutes, streakCount);
+
+        // Stop ambient sounds on session completion
+        _ref.read(ambientSoundProvider.notifier).stopAll();
         return;
       }
       state = state.copyWith(

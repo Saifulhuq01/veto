@@ -9,6 +9,7 @@ import '../../../../core/widgets/glass_button.dart';
 import '../../../../core/widgets/animated_streak_flame.dart';
 import '../../providers/streak_provider.dart';
 import '../../providers/usage_stats_provider.dart';
+import '../../../social/presentation/share_card_generator.dart';
 
 /// Session complete celebration sheet — shown when a focus timer finishes.
 class SessionCompleteSheet extends ConsumerWidget {
@@ -216,6 +217,24 @@ class SessionCompleteSheet extends ConsumerWidget {
                 )
                     .animate()
                     .fadeIn(delay: 600.ms, duration: 400.ms),
+                const SizedBox(height: 12),
+                GlassButton(
+                  label: 'Share Your Focus',
+                  icon: Icons.share,
+                  variant: GlassButtonVariant.secondary,
+                  onPressed: () {
+                    Navigator.of(context).pop(false);
+                    ShareCardGenerator.show(
+                      context,
+                      focusMinutes: completedMinutes,
+                      streakCount: streakCount,
+                      profileName: 'Focus',
+                    );
+                  },
+                  isExpanded: true,
+                )
+                    .animate()
+                    .fadeIn(delay: 650.ms, duration: 400.ms),
                 const SizedBox(height: 12),
                 GlassButton(
                   label: 'Done',
